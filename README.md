@@ -385,6 +385,7 @@ A few bugs to check :
 <p align="center">
   <img src="Misc/Ghetto_solder.jpeg" width="850">
 </p>
+this ghetto prototype alsi has usbc port for the firmware upload and charging the battery thru a tp4056 and an scrapped iPhone 5c battery 
 ---
 
 # 🛠 Planned Features
