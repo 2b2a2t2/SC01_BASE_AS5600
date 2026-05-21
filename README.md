@@ -30,7 +30,7 @@ Powered by 20× AS5600 magnetic encoders, LVGL touchscreen UI, BLE MIDI, Web Con
 
 - 8 Pages × 16 Encoders × 16 MIDI Channels
 - **2048 mappable MIDI CC controls**
-- MIDI CC + MIDI Note support
+- MIDI CC + MIDI Note support (TODO : program change and sysex)
 - BLE MIDI
 - Optional USB MIDI
 - Per-channel page and shortcuts recall
@@ -64,17 +64,18 @@ Combine multiple LFOs together for:
 - Layered movement
 - Rhythmic automation
 - Evolving MIDI control
+- Simple raw chaos
 
 ---
 
 # 🎯 What Makes This Different
 
-✅ No coding required for daily use  
+✅ No coding required for daily use... yet fully open source and hackable
 ✅ Fully editable from touchscreen, browser, or SD card  
 ✅ 2048 assignable MIDI parameters  
 ✅ Real-time modulation engine  
 ✅ Persistent configuration storage  
-✅ Designed specifically for DAWs, synths, and live rigs  
+✅ Designed specifically for DAWs, synths, and live rigs with component that won't fail (use manipulates passive magnet and capacitive buttons = no mechanical flaw)
 
 ---
 
@@ -120,12 +121,15 @@ Combine multiple LFOs together for:
 
 ## AS5600 Encoder Connections
 
+we use 20 of the 24 available busses of the 3 tca9548
+
 | AS5600 | TCA9548 / ESP32 |
 |---|---|
 | VCC | 3.3V |
 | GND | GND |
-| SDA | SDA | SC01Plus pin10
-| SCL | SCL | SC01Plus pin11
+| SDA | SC01Plus pin10 | 
+| SCL | SC01Plus pin11 | 
+
 | DIR | Not connected |
 | OUT | Not connected |
 
@@ -327,7 +331,7 @@ You can fully customize the controller through:
 
 BLE MIDI is enabled by default.
 
-Compatible and incredibly fun garanteed and tested in :
+Compatibility and fun garanteed and tested in :
 
 - DAWs (Ableton, Logic, Reaper)
 - Mobile Apps (drambo, gadget)
@@ -364,8 +368,8 @@ Example:
 
 UI created using:
 
-- LVGL
 - SquareLine Studio
+you can modify sizes color and disposition of objects but removing an object or changing its name may prevent compilation.
 
 Features:
 
@@ -385,25 +389,40 @@ A few bugs to check :
 <p align="center">
   <img src="Misc/Ghetto_solder.jpeg" width="850">
 </p>
-this ghetto prototype alsi has usbc port for the firmware upload and charging the battery thru a tp4056 and an scrapped iPhone 5c battery 
+this ghetto prototype also has usbc port for the firmware upload and charging the battery thru a tp4056 and an scrapped iPhone 5c battery
+i thought the vibration motor would be a nice addition for haptic feedback when tweaking symmetrical knobs and "feel" the detent but using a quiet device is even better, might get removed
 ---
 
 # 🛠 Planned Features
 
 - MIDI clock sync
 - Additional LFO waveforms
-- Full web MIDI editing
+- Full web and onboard MIDI editing
 - OSC support
+- program change and system exclusive messages support
 - MIDI learn mode
 - SD preset manager
+- ws2812 support
+- mpr121 support
+- mcp23017 support
 - Multi-device sync
+- CV/Gate i/o module extension
 - Complex chord mode with progressions and parallel sending
+- Hardware additionnal keyboard with Ws2812 and MPR121
+- midi DIN in/out/thru
+- more embedded LFOs
+- modular menu system
+- add board définitions to bring WidipiM to other hardware (teensy,esp32... with generic screens)
+- real pcb with led rings for each encoder
+- make it waterproof ?
+
 ---
 
 # 🤝 Contributing
 
 Pull requests are welcome.
-
+i´m not a coder IRL so everything in this repo is mainly (subscription free) AI slop and an insane amount of testing and debugging. 
+what do you use and what do you want ? 
 Ideas, improvements, and feature requests are encouraged.
 monsieurgrosconnard(at)gmail.com
 ---
