@@ -112,7 +112,7 @@ Combine multiple LFOs together for:
   <img src="Misc/Pot_page.png" width="750">
 </p>
 <p align="center">
-  <img src="Misc/Mixer_page.png" width="750">
+  <img src="Misc/Mixer_Page.png" width="750">
 </p>
 ---
 
@@ -327,16 +327,11 @@ You can fully customize the controller through:
 
 BLE MIDI is enabled by default.
 
-Compatible with:
+Compatible and incredibly fun garanteed and tested in :
 
-- Ableton Live
-- FL Studio
-- Logic Pro
-- Bitwig
-- Reaper
-- Cubase
-- iPad synths
-- Mobile DAWs
+- DAWs (Ableton, Logic, Reaper)
+- Mobile Apps (drambo, gadget)
+- Hardware synths
 
 ---
 
@@ -386,7 +381,10 @@ Features:
 
 A few bugs to check : 
 -shortcut pots miroring value but not pot Style when symmetrical
-
+-we cannot say the build is complicated but it gets messy easily
+<p align="center">
+  <img src="Misc/Ghetto_solder.jpeg" width="850">
+</p>
 ---
 
 # 🛠 Planned Features
@@ -406,7 +404,7 @@ A few bugs to check :
 Pull requests are welcome.
 
 Ideas, improvements, and feature requests are encouraged.
-
+monsieurgrosconnard(at)gmail.com
 ---
 
 # 📜 License
