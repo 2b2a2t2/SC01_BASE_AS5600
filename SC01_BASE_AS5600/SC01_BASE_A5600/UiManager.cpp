@@ -138,7 +138,7 @@ void UiManager::init() {
     tft = new LGFX();
     tft->begin();
     tft->setRotation(1);
-    tft->setBrightness(255);
+    tft->setBrightness(SCREEN_BRIGHTNESS);
     tft->fillScreen(TFT_BLACK);
 
     lv_init();

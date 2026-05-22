@@ -19220,7 +19220,7 @@
                     "strtype": "OBJECT/Position",
                     "intarray": [
                       28,
-                      11
+                      9
                     ],
                     "InheritedType": 7
                   },
@@ -19720,7 +19720,7 @@
                     "strtype": "OBJECT/Position",
                     "intarray": [
                       89,
-                      11
+                      9
                     ],
                     "InheritedType": 7
                   },
@@ -20221,7 +20221,7 @@
                     "strtype": "OBJECT/Position",
                     "intarray": [
                       148,
-                      11
+                      9
                     ],
                     "InheritedType": 7
                   },
@@ -20722,7 +20722,7 @@
                     "strtype": "OBJECT/Position",
                     "intarray": [
                       208,
-                      11
+                      9
                     ],
                     "InheritedType": 7
                   },
@@ -75583,8 +75583,7 @@
                 "InheritedType": 11
               }
             ],
-            "saved_objtypeKey": "CONTAINER",
-            "tree_closed": true
+            "saved_objtypeKey": "CONTAINER"
           },
           {
             "guid": "GUID8552417-236171S3735113",
@@ -76738,7 +76737,7 @@
     "uiExportFolderPath": "/Users/macadmin/Desktop/SC01_BASE_A5600/SC01_BASE_AS5600/SC01_BASE_A5600/src/UI",
     "projectExportFolderPath": "/Users/macadmin/Desktop/SC01_BASE_A5600/SC01_BASE_AS5600/SC01_BASE_A5600",
     "custom_variable_prefix": "uic",
-    "backup_cnt": 227,
+    "backup_cnt": 229,
     "autosave_cnt": 0,
     "group_color_cnt": 0,
     "lvgl_version": "8.3.6",
