@@ -422,7 +422,8 @@ i thought the vibration motor would be a nice addition for haptic feedback when 
 
 Pull requests are welcome.
 i´m not a coder IRL so everything in this repo is mainly (subscription free) AI slop and an insane amount of testing and debugging. 
-what do you use and what do you want ? 
+
+what do you use, what do you need and what do you want ? 
 Ideas, improvements, and feature requests are encouraged.
 monsieurgrosconnard(at)gmail.com
 ---
