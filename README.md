@@ -71,6 +71,7 @@ Combine multiple LFOs together for:
 # 🎯 What Makes This Different
 
 ✅ No coding required for daily use... yet fully open source and hackable
+
 ✅ Fully editable from touchscreen, browser, or SD card  
 ✅ 2048 assignable MIDI parameters  
 ✅ Real-time modulation engine  
