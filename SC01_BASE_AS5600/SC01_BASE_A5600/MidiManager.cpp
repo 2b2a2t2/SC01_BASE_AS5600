@@ -101,7 +101,7 @@ void MidiManager::init() {
 }
 
 void MidiManager::update() {
-    // Control_Surface.update() is usually called in the main loop
+    // Control_Surface.loop() is usually called in the main loop
 }
 
 Channel MidiManager::getMIDIChannel(int channelIndex) {
@@ -186,7 +186,7 @@ void MidiManager::sendTrackLayerRelease(int layerIndex) {
 void MidiManager::handleIncomingMIDI(Channel channel, uint8_t controller, uint8_t value) {
     if (ignoreIncomingMIDI) return;
 
-    int targetChannel = channel.getRaw() - 1; // getRaw returns 1-16
+    int targetChannel = channel.getRaw(); // getRaw returns 0-15
     if (targetChannel < 0 || targetChannel >= 16) return;
 
     updateGlobalValueSync(controller, targetChannel, value);

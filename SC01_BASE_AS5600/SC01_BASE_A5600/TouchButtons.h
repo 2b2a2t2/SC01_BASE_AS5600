@@ -31,7 +31,7 @@ public:
     interruptHandlers[0] = handleInterrupt1;
     interruptHandlers[1] = handleInterrupt2;
     
-    touchSetDefaultThreshold(5);
+    touchSetDefaultThreshold(6);
     
     for (int i = 0; i < NUM_BUTTONS; i++) {
       buttonStates[i] = false;

@@ -1,10 +1,11 @@
 #include "Config.h"
 
-const char *ssid = "FCI";
-const char *password = "1Moutonmangeleloup";
+const WifiNetwork wifiNetworks[] = {
+    {"JUE_BAT", "azertyuiop"},
+    {"FCI", "1Moutonmangeleloup"},
+    {"B_A_T", "azertyuiop"}
+};
+const int numWifiNetworks = sizeof(wifiNetworks) / sizeof(wifiNetworks[0]);
 
-// const char *ssid = "JUE_BAT";
-// const char *password = "azertyuiop";
-
-// const char *ssid = "B_A_T";
-// const char *password = "azertyuiop";
+const char *ssid = wifiNetworks[0].ssid;
+const char *password = wifiNetworks[0].password;

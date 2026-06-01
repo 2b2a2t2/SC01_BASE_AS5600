@@ -1072,22 +1072,9 @@ lv_obj_set_style_outline_pad(ui_ContainerCCPage, 0, LV_PART_MAIN| LV_STATE_DEFAU
 lv_obj_set_style_pad_row(ui_ContainerCCPage, 5, LV_PART_MAIN| LV_STATE_DEFAULT);
 lv_obj_set_style_pad_column(ui_ContainerCCPage, 1, LV_PART_MAIN| LV_STATE_DEFAULT);
 
-ui_RollerEncoders = lv_roller_create(ui_ContainerCCPage);
-lv_roller_set_options( ui_RollerEncoders, "ALL\nPRESETS\nLFO Knobs", LV_ROLLER_MODE_INFINITE );
-lv_obj_set_width( ui_RollerEncoders, 213);
-lv_obj_set_height( ui_RollerEncoders, 25);
-lv_obj_set_x( ui_RollerEncoders, 35 );
-lv_obj_set_y( ui_RollerEncoders, -14 );
-lv_obj_set_align( ui_RollerEncoders, LV_ALIGN_CENTER );
-lv_obj_set_style_text_font(ui_RollerEncoders, &lv_font_montserrat_8, LV_PART_MAIN| LV_STATE_DEFAULT);
-
-lv_obj_set_style_text_font(ui_RollerEncoders, &lv_font_montserrat_8, LV_PART_SELECTED| LV_STATE_DEFAULT);
-lv_obj_set_style_bg_color(ui_RollerEncoders, lv_color_hex(0x000000), LV_PART_SELECTED | LV_STATE_DEFAULT );
-lv_obj_set_style_bg_opa(ui_RollerEncoders, 255, LV_PART_SELECTED| LV_STATE_DEFAULT);
-
 ui_ButtonPage1 = lv_btn_create(ui_ContainerCCPage);
 lv_obj_set_height( ui_ButtonPage1, 23);
-lv_obj_set_width( ui_ButtonPage1, lv_pct(12));
+lv_obj_set_width( ui_ButtonPage1, lv_pct(24));
 lv_obj_set_x( ui_ButtonPage1, -65 );
 lv_obj_set_y( ui_ButtonPage1, 14 );
 lv_obj_set_align( ui_ButtonPage1, LV_ALIGN_CENTER );
@@ -1109,7 +1096,7 @@ lv_obj_set_style_text_font(ui_LabelPage1, &lv_font_montserrat_10, LV_PART_MAIN| 
 
 ui_ButtonPage2 = lv_btn_create(ui_ContainerCCPage);
 lv_obj_set_height( ui_ButtonPage2, 23);
-lv_obj_set_width( ui_ButtonPage2, lv_pct(12));
+lv_obj_set_width( ui_ButtonPage2, lv_pct(24));
 lv_obj_set_x( ui_ButtonPage2, -65 );
 lv_obj_set_y( ui_ButtonPage2, 14 );
 lv_obj_set_align( ui_ButtonPage2, LV_ALIGN_CENTER );
@@ -1131,7 +1118,7 @@ lv_obj_set_style_text_font(ui_LabelPage2, &lv_font_montserrat_10, LV_PART_MAIN| 
 
 ui_ButtonPage3 = lv_btn_create(ui_ContainerCCPage);
 lv_obj_set_height( ui_ButtonPage3, 23);
-lv_obj_set_width( ui_ButtonPage3, lv_pct(12));
+lv_obj_set_width( ui_ButtonPage3, lv_pct(24));
 lv_obj_set_x( ui_ButtonPage3, -65 );
 lv_obj_set_y( ui_ButtonPage3, 14 );
 lv_obj_set_align( ui_ButtonPage3, LV_ALIGN_CENTER );
@@ -1153,7 +1140,7 @@ lv_obj_set_style_text_font(ui_LabelPage3, &lv_font_montserrat_10, LV_PART_MAIN| 
 
 ui_ButtonPage4 = lv_btn_create(ui_ContainerCCPage);
 lv_obj_set_height( ui_ButtonPage4, 23);
-lv_obj_set_width( ui_ButtonPage4, lv_pct(12));
+lv_obj_set_width( ui_ButtonPage4, lv_pct(24));
 lv_obj_set_x( ui_ButtonPage4, -65 );
 lv_obj_set_y( ui_ButtonPage4, 14 );
 lv_obj_set_align( ui_ButtonPage4, LV_ALIGN_CENTER );
@@ -1175,7 +1162,7 @@ lv_obj_set_style_text_font(ui_LabelPage4, &lv_font_montserrat_10, LV_PART_MAIN| 
 
 ui_ButtonPage5 = lv_btn_create(ui_ContainerCCPage);
 lv_obj_set_height( ui_ButtonPage5, 23);
-lv_obj_set_width( ui_ButtonPage5, lv_pct(12));
+lv_obj_set_width( ui_ButtonPage5, lv_pct(24));
 lv_obj_set_x( ui_ButtonPage5, -65 );
 lv_obj_set_y( ui_ButtonPage5, 14 );
 lv_obj_set_align( ui_ButtonPage5, LV_ALIGN_CENTER );
@@ -1197,7 +1184,7 @@ lv_obj_set_style_text_font(ui_LabelPage5, &lv_font_montserrat_10, LV_PART_MAIN| 
 
 ui_ButtonPage6 = lv_btn_create(ui_ContainerCCPage);
 lv_obj_set_height( ui_ButtonPage6, 23);
-lv_obj_set_width( ui_ButtonPage6, lv_pct(12));
+lv_obj_set_width( ui_ButtonPage6, lv_pct(24));
 lv_obj_set_x( ui_ButtonPage6, -65 );
 lv_obj_set_y( ui_ButtonPage6, 14 );
 lv_obj_set_align( ui_ButtonPage6, LV_ALIGN_CENTER );
@@ -1219,7 +1206,7 @@ lv_obj_set_style_text_font(ui_LabelPage6, &lv_font_montserrat_10, LV_PART_MAIN| 
 
 ui_ButtonPage7 = lv_btn_create(ui_ContainerCCPage);
 lv_obj_set_height( ui_ButtonPage7, 23);
-lv_obj_set_width( ui_ButtonPage7, lv_pct(12));
+lv_obj_set_width( ui_ButtonPage7, lv_pct(24));
 lv_obj_set_x( ui_ButtonPage7, -65 );
 lv_obj_set_y( ui_ButtonPage7, 14 );
 lv_obj_set_align( ui_ButtonPage7, LV_ALIGN_CENTER );
@@ -1241,7 +1228,7 @@ lv_obj_set_style_text_font(ui_LabelPage7, &lv_font_montserrat_10, LV_PART_MAIN| 
 
 ui_ButtonPage8 = lv_btn_create(ui_ContainerCCPage);
 lv_obj_set_height( ui_ButtonPage8, 23);
-lv_obj_set_width( ui_ButtonPage8, lv_pct(12));
+lv_obj_set_width( ui_ButtonPage8, lv_pct(24));
 lv_obj_set_x( ui_ButtonPage8, -65 );
 lv_obj_set_y( ui_ButtonPage8, 14 );
 lv_obj_set_align( ui_ButtonPage8, LV_ALIGN_CENTER );
@@ -1950,16 +1937,6 @@ lv_obj_set_style_text_align(ui_LabelDisplay4, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN
 lv_obj_set_style_text_decor(ui_LabelDisplay4, LV_TEXT_DECOR_NONE, LV_PART_MAIN| LV_STATE_DEFAULT);
 lv_obj_set_style_text_font(ui_LabelDisplay4, &lv_font_montserrat_8, LV_PART_MAIN| LV_STATE_DEFAULT);
 
-ui_PanelStats = lv_obj_create(ui_Screen1);
-lv_obj_set_width( ui_PanelStats, 76);
-lv_obj_set_height( ui_PanelStats, 42);
-lv_obj_set_x( ui_PanelStats, -202 );
-lv_obj_set_y( ui_PanelStats, 140 );
-lv_obj_set_align( ui_PanelStats, LV_ALIGN_CENTER );
-lv_obj_clear_flag( ui_PanelStats, LV_OBJ_FLAG_SCROLLABLE );    /// Flags
-lv_obj_set_style_bg_color(ui_PanelStats, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT );
-lv_obj_set_style_bg_opa(ui_PanelStats, 255, LV_PART_MAIN| LV_STATE_DEFAULT);
-
 ui_ContainerPots1 = ui_ContainerPots_create(ui_Screen1);
 lv_obj_set_x( ui_ContainerPots1, 120 );
 lv_obj_set_y( ui_ContainerPots1, -31 );
@@ -1975,36 +1952,51 @@ lv_obj_set_y( ui_ContainerPots1, -31 );
 
 ui_PanelKeyboard = lv_obj_create(ui_Screen1);
 lv_obj_set_width( ui_PanelKeyboard, 480);
-lv_obj_set_height( ui_PanelKeyboard, 260);
-lv_obj_set_x( ui_PanelKeyboard, 0 );
-lv_obj_set_y( ui_PanelKeyboard, -31 );
+lv_obj_set_height( ui_PanelKeyboard, 360);
 lv_obj_set_align( ui_PanelKeyboard, LV_ALIGN_CENTER );
 lv_obj_add_flag( ui_PanelKeyboard, LV_OBJ_FLAG_HIDDEN );   /// Flags
 lv_obj_clear_flag( ui_PanelKeyboard, LV_OBJ_FLAG_SCROLLABLE );    /// Flags
+lv_obj_set_style_bg_color(ui_PanelKeyboard, lv_color_hex(0x101418), LV_PART_MAIN | LV_STATE_DEFAULT );
+lv_obj_set_style_bg_opa(ui_PanelKeyboard, 255, LV_PART_MAIN| LV_STATE_DEFAULT);
+
+ui_WifiRoller = lv_roller_create(ui_PanelKeyboard);
+lv_roller_set_options( ui_WifiRoller, "Mobile\nHome\nWork", LV_ROLLER_MODE_INFINITE );
+lv_obj_set_width( ui_WifiRoller, 90);
+lv_obj_set_height( ui_WifiRoller, 30);
+lv_obj_set_x( ui_WifiRoller, 187 );
+lv_obj_set_y( ui_WifiRoller, -89 );
+lv_obj_set_align( ui_WifiRoller, LV_ALIGN_CENTER );
+lv_obj_set_style_text_font(ui_WifiRoller, &lv_font_montserrat_8, LV_PART_MAIN| LV_STATE_DEFAULT);
+
+lv_obj_set_style_text_font(ui_WifiRoller, &lv_font_montserrat_8, LV_PART_SELECTED| LV_STATE_DEFAULT);
+lv_obj_set_style_bg_color(ui_WifiRoller, lv_color_hex(0x000000), LV_PART_SELECTED | LV_STATE_DEFAULT );
+lv_obj_set_style_bg_opa(ui_WifiRoller, 255, LV_PART_SELECTED| LV_STATE_DEFAULT);
 
 ui_Keyboard1 = lv_keyboard_create(ui_PanelKeyboard);
 lv_obj_set_width( ui_Keyboard1, 480);
 lv_obj_set_height( ui_Keyboard1, 193);
 lv_obj_set_x( ui_Keyboard1, 0 );
-lv_obj_set_y( ui_Keyboard1, 31 );
+lv_obj_set_y( ui_Keyboard1, 24 );
 lv_obj_set_align( ui_Keyboard1, LV_ALIGN_CENTER );
 
 ui_TextArea1 = lv_textarea_create(ui_PanelKeyboard);
 lv_obj_set_width( ui_TextArea1, 123);
-lv_obj_set_height( ui_TextArea1, 60);
+lv_obj_set_height( ui_TextArea1, 50);
 lv_obj_set_x( ui_TextArea1, 67 );
-lv_obj_set_y( ui_TextArea1, -97 );
+lv_obj_set_y( ui_TextArea1, -131 );
 lv_obj_set_align( ui_TextArea1, LV_ALIGN_CENTER );
 lv_obj_set_style_bg_color(ui_TextArea1, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT );
 lv_obj_set_style_bg_opa(ui_TextArea1, 255, LV_PART_MAIN| LV_STATE_DEFAULT);
 
 ui_EditLabel = lv_label_create(ui_PanelKeyboard);
-lv_obj_set_width( ui_EditLabel, LV_SIZE_CONTENT);  /// 1
+lv_obj_set_width( ui_EditLabel, 209);
 lv_obj_set_height( ui_EditLabel, LV_SIZE_CONTENT);   /// 1
-lv_obj_set_x( ui_EditLabel, -132 );
-lv_obj_set_y( ui_EditLabel, -97 );
+lv_obj_set_x( ui_EditLabel, -118 );
+lv_obj_set_y( ui_EditLabel, -132 );
 lv_obj_set_align( ui_EditLabel, LV_ALIGN_CENTER );
 lv_label_set_text(ui_EditLabel,"Channel : \nCC# : \nPage : ");
+lv_obj_set_style_text_align(ui_EditLabel, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN| LV_STATE_DEFAULT);
+lv_obj_set_style_radius(ui_EditLabel, 5, LV_PART_MAIN| LV_STATE_DEFAULT);
 lv_obj_set_style_bg_color(ui_EditLabel, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT );
 lv_obj_set_style_bg_opa(ui_EditLabel, 255, LV_PART_MAIN| LV_STATE_DEFAULT);
 
@@ -2012,7 +2004,7 @@ ui_ButtonWifi = lv_btn_create(ui_PanelKeyboard);
 lv_obj_set_width( ui_ButtonWifi, 86);
 lv_obj_set_height( ui_ButtonWifi, 49);
 lv_obj_set_x( ui_ButtonWifi, 186 );
-lv_obj_set_y( ui_ButtonWifi, -98 );
+lv_obj_set_y( ui_ButtonWifi, -133 );
 lv_obj_set_align( ui_ButtonWifi, LV_ALIGN_CENTER );
 lv_obj_set_style_radius(ui_ButtonWifi, 0, LV_PART_MAIN| LV_STATE_DEFAULT);
 lv_obj_set_style_bg_color(ui_ButtonWifi, lv_color_hex(0x184873), LV_PART_MAIN | LV_STATE_DEFAULT );
@@ -2027,6 +2019,16 @@ lv_obj_set_height( ui_LabelWifi, LV_SIZE_CONTENT);   /// 1
 lv_obj_set_align( ui_LabelWifi, LV_ALIGN_CENTER );
 lv_label_set_text(ui_LabelWifi,"Connect Wifi");
 lv_obj_set_style_text_font(ui_LabelWifi, &lv_font_montserrat_8, LV_PART_MAIN| LV_STATE_DEFAULT);
+
+ui_PanelStats = lv_obj_create(ui_Screen1);
+lv_obj_set_width( ui_PanelStats, 76);
+lv_obj_set_height( ui_PanelStats, 42);
+lv_obj_set_x( ui_PanelStats, -202 );
+lv_obj_set_y( ui_PanelStats, 140 );
+lv_obj_set_align( ui_PanelStats, LV_ALIGN_CENTER );
+lv_obj_clear_flag( ui_PanelStats, LV_OBJ_FLAG_SCROLLABLE );    /// Flags
+lv_obj_set_style_bg_color(ui_PanelStats, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT );
+lv_obj_set_style_bg_opa(ui_PanelStats, 255, LV_PART_MAIN| LV_STATE_DEFAULT);
 
 lv_obj_add_event_cb(ui_Arc17, ui_event_Arc17, LV_EVENT_ALL, NULL);
 lv_obj_add_event_cb(ui_Arc18, ui_event_Arc18, LV_EVENT_ALL, NULL);

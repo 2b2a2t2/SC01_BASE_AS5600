@@ -7,6 +7,7 @@
 #include "HardwareHAL.h"
 #include "SensorManager.h"
 #include "StorageManager.h"
+#include "WebServerManager.h"
 
 // --- LGFX Implementation for WT32-SC01 Plus ---
 class LGFX : public lgfx::LGFX_Device {
@@ -187,6 +188,42 @@ void UiManager::init() {
 
     if (ui_ButtonWifi) {
         lv_obj_add_event_cb(ui_ButtonWifi, ui_event_ButtonWifi, LV_EVENT_CLICKED, NULL);
+    }
+
+    if (ui_WifiRoller) {
+        String options = "";
+        for (int i = 0; i < numWifiNetworks; i++) {
+            if (i > 0) options += "\n";
+            options += wifiNetworks[i].ssid;
+        }
+        lv_roller_set_options(ui_WifiRoller, options.c_str(), LV_ROLLER_MODE_INFINITE);
+
+        // Pre-select the currently active SSID
+        for (int i = 0; i < numWifiNetworks; i++) {
+            if (strcmp(ssid, wifiNetworks[i].ssid) == 0) {
+                lv_roller_set_selected(ui_WifiRoller, i, LV_ANIM_OFF);
+                break;
+            }
+        }
+
+        // Add event callback to handle value change
+        lv_obj_add_event_cb(ui_WifiRoller, [](lv_event_t *e) {
+            if (lv_event_get_code(e) == LV_EVENT_VALUE_CHANGED) {
+                int selectedIndex = lv_roller_get_selected(ui_WifiRoller);
+                if (selectedIndex >= 0 && selectedIndex < numWifiNetworks) {
+                    ssid = wifiNetworks[selectedIndex].ssid;
+                    password = wifiNetworks[selectedIndex].password;
+                    Serial.print("Selected WiFi Network: ");
+                    Serial.println(ssid);
+                    
+                    // If WiFi is currently enabled and connected, reconnect to the new network
+                    if (WebServerManager::isWiFiEnabled()) {
+                        WebServerManager::stopWiFi();
+                        WebServerManager::startWiFi();
+                    }
+                }
+            }
+        }, LV_EVENT_VALUE_CHANGED, NULL);
     }
 
     if (ui_SwitchLFOCC) {
@@ -874,7 +911,9 @@ void UiManager::updateSelectedArcMod(float mixedLFOValue) {
         for (int i = 0; i < 16; i++) {
             if (ui_ArcMod[i]) {
                 if (MidiManager::modulationTargetPage == 0 && MidiManager::selectedArcForModulation == 7 && MidiManager::modulationTargetChannel == i) {
-                    lv_arc_set_value(ui_ArcMod[i], (int)mixedLFOValue);
+                    float baseVal = MidiManager::mixerPageValues[0][i];
+                    int lfoValue = constrain((int)(baseVal + (mixedLFOValue - 0.5f) * 127.0f), 0, 127);
+                    lv_arc_set_value(ui_ArcMod[i], lfoValue);
                     lv_obj_clear_flag(ui_ArcMod[i], LV_OBJ_FLAG_HIDDEN);
                 } else {
                     lv_obj_add_flag(ui_ArcMod[i], LV_OBJ_FLAG_HIDDEN);
@@ -886,7 +925,10 @@ void UiManager::updateSelectedArcMod(float mixedLFOValue) {
 
     int arcIndex = MidiManager::selectedArcForModulation - 1;
     if (ui_ArcMod[arcIndex] && MidiManager::currentPage == MidiManager::modulationTargetPage && MidiManager::currentMidiChannel == MidiManager::modulationTargetChannel) {
-        int lfoValue = (int)(mixedLFOValue * 127);
+        int targetPage = MidiManager::modulationTargetPage;
+        int targetChannel = MidiManager::modulationTargetChannel;
+        int baseValue = MidiManager::storedMidiCCValues[targetPage][targetChannel][arcIndex];
+        int lfoValue = constrain((int)(baseValue + (mixedLFOValue - 0.5f) * 127.0f), 0, 127);
         lv_arc_set_value(ui_ArcMod[arcIndex], lfoValue);
     }
 }

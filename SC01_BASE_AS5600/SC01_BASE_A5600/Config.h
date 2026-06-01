@@ -4,6 +4,12 @@
 #include <Arduino.h>
 
 // ========== WIFI CONFIGURATION ==========
+struct WifiNetwork {
+    const char *ssid;
+    const char *password;
+};
+extern const WifiNetwork wifiNetworks[];
+extern const int numWifiNetworks;
 extern const char *ssid;
 extern const char *password;
 const unsigned long WIFI_CONNECT_TIMEOUT = 10000;

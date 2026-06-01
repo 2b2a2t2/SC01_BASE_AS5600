@@ -88,7 +88,6 @@ lv_obj_t *ui_LabelButtonLayer3;
 lv_obj_t *ui_ButtonLayer4;
 lv_obj_t *ui_LabelButtonLayer4;
 lv_obj_t *ui_ContainerCCPage;
-lv_obj_t *ui_RollerEncoders;
 lv_obj_t *ui_ButtonPage1;
 lv_obj_t *ui_LabelPage1;
 lv_obj_t *ui_ButtonPage2;
@@ -160,15 +159,16 @@ lv_obj_t *ui_LabelVibration;
 lv_obj_t *ui_SwitchVibration;
 lv_obj_t *ui_LabelDisplay3;
 lv_obj_t *ui_LabelDisplay4;
-void ui_event_PanelStats( lv_event_t * e);
-lv_obj_t *ui_PanelStats;
 lv_obj_t *ui_ContainerPots1;
 lv_obj_t *ui_PanelKeyboard;
+lv_obj_t *ui_WifiRoller;
 lv_obj_t *ui_Keyboard1;
 lv_obj_t *ui_TextArea1;
 lv_obj_t *ui_EditLabel;
 lv_obj_t *ui_ButtonWifi;
 lv_obj_t *ui_LabelWifi;
+void ui_event_PanelStats( lv_event_t * e);
+lv_obj_t *ui_PanelStats;
 // CUSTOM VARIABLES
 
 // EVENTS

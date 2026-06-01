@@ -22,6 +22,7 @@ BluetoothMIDI_Interface midi_ble;
 // ========== MIDI CALLBACKS ==========
 struct MyMIDI_Callbacks : FineGrainedMIDI_Callbacks<MyMIDI_Callbacks> {
     void onControlChange(Channel channel, uint8_t controller, uint8_t value, Cable cable) {
+        Serial.printf("MIDI RX: Ch %d, CC %d, Val %d\n", channel.getRaw() + 1, controller, value);
         MidiManager::handleIncomingMIDI(channel, controller, value);
     }
 } midi_callbacks;
@@ -149,6 +150,7 @@ void loop() {
     
     // Background tasks
     midi_ble.update();
+    Control_Surface.loop();
     WebServerManager::handleWiFi();
     StorageManager::handleAutoSave();
     TouchButtons::update();
@@ -159,13 +161,20 @@ void loop() {
 // ========== MODULATION MIDI ENGINE ==========
 void updateModulatedArcMIDI() {
     int arcIndex = MidiManager::selectedArcForModulation - 1;
+    if (arcIndex < 0 || arcIndex >= 16) return;
+
+    int targetPage = MidiManager::modulationTargetPage;
+    int targetChannel = MidiManager::modulationTargetChannel;
+    int baseValue = MidiManager::storedMidiCCValues[targetPage][targetChannel][arcIndex];
+
     float mixedValue = LfoEngine::getMixedValue();
-    int finalMidiValue = constrain((int)(mixedValue * 127), 0, 127);
+    float offset = (mixedValue - 0.5f) * 127.0f;
+    int finalMidiValue = constrain((int)(baseValue + offset), 0, 127);
 
     static int lastSentModulatedValue[16] = { -1 };
 
     if (finalMidiValue != lastSentModulatedValue[arcIndex]) {
-        MidiManager::sendModulatedCC(arcIndex, finalMidiValue, MidiManager::modulationTargetPage, MidiManager::modulationTargetChannel);
+        MidiManager::sendModulatedCC(arcIndex, finalMidiValue, targetPage, targetChannel);
         lastSentModulatedValue[arcIndex] = finalMidiValue;
     }
 }
