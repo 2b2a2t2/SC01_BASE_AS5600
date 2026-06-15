@@ -66,31 +66,66 @@ void SensorManager::update() {
 
 void SensorManager::updateStandardPot(int i, float currentAngle, float angleChange) {
     float sensitivity = 1.0f;
+    uint8_t mode = MidiManager::storedPotentiometerModes[MidiManager::currentPage][MidiManager::currentMidiChannel][i];
     bool hasDetent = MidiManager::storedPotentiometerDetents[MidiManager::currentPage][MidiManager::currentMidiChannel][i];
+    
     if (hasDetent) {
         sensitivity = 0.4f; // Reduced sensitivity for fine tuning around center
     }
+    
     float scaledChange = (angleChange / 360.0) * 127.0f * sensitivity;
-    potentiometerValues[i] += scaledChange;
-    potentiometerValues[i] = constrain(potentiometerValues[i], 0, 127);
-    int midiCCValue = (int)potentiometerValues[i];
-
-    if (hasDetent) {
-        if (midiCCValue >= LFO_OFFSET_DETENT_MIN && midiCCValue <= LFO_OFFSET_DETENT_MAX) {
-            midiCCValue = 64;
-            potentiometerValues[i] = 64.0f;
+    
+    if (mode == 0) {
+        // Absolute mode
+        potentiometerValues[i] += scaledChange;
+        potentiometerValues[i] = constrain(potentiometerValues[i], 0, 127);
+        int midiCCValue = (int)potentiometerValues[i];
+        
+        if (hasDetent) {
+            if (midiCCValue >= LFO_OFFSET_DETENT_MIN && midiCCValue <= LFO_OFFSET_DETENT_MAX) {
+                midiCCValue = 64;
+                potentiometerValues[i] = 64.0f;
+            }
         }
-    }
-
-    // Smooth UI Update (Every tick)
-    currentPotentiometerValues[i] = potentiometerValues[i];
-    if (!UiManager::isMixerMode) UiManager::refreshSinglePot(i);
-
-    // MIDI and Global Sync (Only on integer change)
-    if (midiCCValue != currentMidiCCValues[i]) {
-        MidiManager::updateGlobalValueSync(MidiManager::currentCCBase + i + 1, MidiManager::currentMidiChannel, midiCCValue, i);
-        MidiManager::sendCC(i, midiCCValue);
-        currentMidiCCValues[i] = midiCCValue;
+        
+        // Smooth UI Update
+        currentPotentiometerValues[i] = potentiometerValues[i];
+        if (!UiManager::isMixerMode) UiManager::refreshSinglePot(i);
+        
+        // MIDI and Global Sync
+        if (midiCCValue != currentMidiCCValues[i]) {
+            MidiManager::updateGlobalValueSync(MidiManager::currentCCBase + i + 1, MidiManager::currentMidiChannel, midiCCValue, i);
+            MidiManager::sendCC(i, midiCCValue);
+            currentMidiCCValues[i] = midiCCValue;
+        }
+    } else {
+        // Relative Mode (1 or 2) - Endless rotation
+        static float relativeAccumulators[20] = {0};
+        relativeAccumulators[i] += scaledChange;
+        
+        int steps = (int)relativeAccumulators[i];
+        if (steps != 0) {
+            relativeAccumulators[i] -= steps;
+            
+            if (mode == 1) { // 7Fh/01h
+                // Map positive steps to 1..64, negative steps to 127..65
+                // Wait, if steps=1 -> 1. If steps=-1 -> 127.
+                int relVal = (steps > 0) ? steps : (128 + steps);
+                MidiManager::sendCC(i, relVal);
+            } else if (mode == 2) { // 3Fh/41h
+                // Map positive steps to 65+, negative steps to 63-
+                int relVal = 64 + steps;
+                MidiManager::sendCC(i, relVal);
+            }
+        }
+        
+        // Continuous wrapping arc for visual feedback
+        potentiometerValues[i] += scaledChange;
+        while (potentiometerValues[i] > 127) potentiometerValues[i] -= 128.0f;
+        while (potentiometerValues[i] < 0) potentiometerValues[i] += 128.0f;
+        
+        currentPotentiometerValues[i] = potentiometerValues[i];
+        if (!UiManager::isMixerMode) UiManager::refreshSinglePot(i);
     }
 }
 

@@ -19,6 +19,7 @@ TrackActionButtonConfig MidiManager::trackLayerActions[4];
 
 int MidiManager::storedMidiCCValues[NUM_PAGES][NUM_CHANNELS][NUM_POTS];
 float MidiManager::storedPotentiometerValues[NUM_PAGES][NUM_CHANNELS][NUM_POTS];
+uint8_t MidiManager::storedPotentiometerModes[NUM_PAGES][NUM_CHANNELS][NUM_POTS];
 bool MidiManager::storedPotentiometerDetents[NUM_PAGES][NUM_CHANNELS][NUM_POTS];
 float MidiManager::mixerVolumes[16] = { 0 };
 float MidiManager::rowPotentiometerValues[4][4] = { 0 };
@@ -26,6 +27,7 @@ String MidiManager::currentArcLabels[NUM_POTS];
 String MidiManager::currentMixerArcLabels[16];
 bool MidiManager::ignoreIncomingMIDI = false;
 unsigned long MidiManager::lastExternalUpdate[20] = { 0 };
+unsigned long MidiManager::lastLocalUpdate[20] = { 0 };
 bool MidiManager::needsResync = false;
 
 int MidiManager::selectedArcForModulation = 1;
@@ -94,6 +96,7 @@ void MidiManager::init() {
     for (int page = 0; page < NUM_PAGES; page++) {
         for (int ch = 0; ch < NUM_CHANNELS; ch++) {
             for (int pot = 0; pot < NUM_POTS; pot++) {
+                storedPotentiometerModes[page][ch][pot] = 0;
                 storedPotentiometerDetents[page][ch][pot] = false;
             }
         }
@@ -189,10 +192,80 @@ void MidiManager::handleIncomingMIDI(Channel channel, uint8_t controller, uint8_
     int targetChannel = channel.getRaw(); // getRaw returns 0-15
     if (targetChannel < 0 || targetChannel >= 16) return;
 
+    // Ignore incoming MIDI for the modulated CC if modulation is active and there is non-zero LFO mix
+    if (modulationEnabled && !LfoEngine::isKilled && selectedArcForModulation >= 1) {
+        bool hasActiveModulation = (LfoEngine::mixAmounts[0] > 0.0f || 
+                                    LfoEngine::mixAmounts[1] > 0.0f || 
+                                    LfoEngine::mixAmounts[2] > 0.0f || 
+                                    LfoEngine::mixAmounts[3] > 0.0f);
+        if (hasActiveModulation) {
+            int modulatedArcIdx = selectedArcForModulation - 1;
+            int modulatedCC = (modulationTargetPage * 16) + modulatedArcIdx + 1;
+            if (controller == modulatedCC && targetChannel == modulationTargetChannel) {
+                return;
+            }
+        }
+    }
+
+    // 1. Prevent feedback loops: ignore incoming MIDI if user is actively turning the local physical encoder
+    if (controller >= 1 && controller <= 128) {
+        int targetPage = (controller - 1) / 16;
+        int targetPot = (controller - 1) % 16;
+        
+        // Ignore if value is already identical
+        if (storedMidiCCValues[targetPage][targetChannel][targetPot] == value) {
+            return;
+        }
+
+        // If this pot is currently active on screen
+        if (targetPage == currentPage && targetChannel == currentMidiChannel) {
+            if (millis() - lastLocalUpdate[targetPot] < 300) {
+                return; // Ignore incoming message as user is actively turning this encoder
+            }
+        }
+
+        // Check mirrored row pots (16-19)
+        if (!UiManager::isLfoMode) {
+            int rowStartCC = UiManager::ccRowIndex * 4;
+            int rowPage = rowStartCC / 16;
+            int rowPotStart = rowStartCC % 16;
+            if (targetPage == rowPage && targetChannel == currentMidiChannel) {
+                if (targetPot >= rowPotStart && targetPot < rowPotStart + 4) {
+                    int rowArcIdx = 16 + (targetPot - rowPotStart);
+                    if (millis() - lastLocalUpdate[rowArcIdx] < 300) {
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Mixer mode feedback loop prevention
+    for (int p = 0; p < 5; p++) {
+        for (int i = 0; i < 16; i++) {
+            if (mixerPageCCs[p][i] == controller && mixerPageChannels[p][i] == targetChannel) {
+                // Ignore if value is identical
+                if ((int)mixerPageValues[p][i] == value) {
+                    return;
+                }
+                
+                if (UiManager::isMixerMode && UiManager::currentMixerPage == p) {
+                    if (millis() - lastLocalUpdate[i] < 300) {
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
     updateGlobalValueSync(controller, targetChannel, value);
 }
 
 void MidiManager::updateGlobalValueSync(uint8_t cc, uint8_t channel, int value, int initiatorIndex) {
+    if (initiatorIndex != -1 && initiatorIndex >= 0 && initiatorIndex < 20) {
+        lastLocalUpdate[initiatorIndex] = millis();
+    }
+
     // 1. Update standard storage
     if (cc >= 1 && cc <= 128) {
         int targetPage = (cc - 1) / 16;

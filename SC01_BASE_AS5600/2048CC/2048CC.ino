@@ -165,17 +165,36 @@ void updateModulatedArcMIDI() {
 
     int targetPage = MidiManager::modulationTargetPage;
     int targetChannel = MidiManager::modulationTargetChannel;
-    int baseValue = MidiManager::storedMidiCCValues[targetPage][targetChannel][arcIndex];
 
-    float mixedValue = LfoEngine::getMixedValue();
-    float offset = (mixedValue - 0.5f) * 127.0f;
-    int finalMidiValue = constrain((int)(baseValue + offset), 0, 127);
+    // Check if modulation is active and mix amounts are non-zero
+    bool hasActiveModulation = MidiManager::modulationEnabled && !LfoEngine::isKilled && 
+                              (LfoEngine::mixAmounts[0] > 0.0f || 
+                               LfoEngine::mixAmounts[1] > 0.0f || 
+                               LfoEngine::mixAmounts[2] > 0.0f || 
+                               LfoEngine::mixAmounts[3] > 0.0f);
 
     static int lastSentModulatedValue[16] = { -1 };
+    static bool wasModulating[16] = { false };
 
-    if (finalMidiValue != lastSentModulatedValue[arcIndex]) {
-        MidiManager::sendModulatedCC(arcIndex, finalMidiValue, targetPage, targetChannel);
-        lastSentModulatedValue[arcIndex] = finalMidiValue;
+    if (hasActiveModulation) {
+        int baseValue = MidiManager::storedMidiCCValues[targetPage][targetChannel][arcIndex];
+        float mixedValue = LfoEngine::getMixedValue();
+        float offset = (mixedValue - 0.5f) * 127.0f;
+        int finalMidiValue = constrain((int)(baseValue + offset), 0, 127);
+
+        if (finalMidiValue != lastSentModulatedValue[arcIndex]) {
+            MidiManager::sendModulatedCC(arcIndex, finalMidiValue, targetPage, targetChannel);
+            lastSentModulatedValue[arcIndex] = finalMidiValue;
+        }
+        wasModulating[arcIndex] = true;
+    } else {
+        // If it was modulating, send one final CC to restore the base value in the DAW
+        if (wasModulating[arcIndex]) {
+            int baseValue = MidiManager::storedMidiCCValues[targetPage][targetChannel][arcIndex];
+            MidiManager::sendModulatedCC(arcIndex, baseValue, targetPage, targetChannel);
+            lastSentModulatedValue[arcIndex] = baseValue;
+            wasModulating[arcIndex] = false;
+        }
     }
 }
 

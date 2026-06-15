@@ -148,7 +148,17 @@ bool StorageManager::saveConfig() {
     for (int page = 0; page < NUM_PAGES; page++) {
         for (int ch = 0; ch < NUM_CHANNELS; ch++) {
             for (int pot = 0; pot < NUM_POTS; pot++) {
-                detents.add(MidiManager::storedPotentiometerDetents[page][ch][pot] ? 1 : 0);
+                detents.add(MidiManager::storedPotentiometerDetents[page][ch][pot]);
+            }
+        }
+    }
+
+    // Potentiometers Modes flat array
+    JsonArray modes = doc.createNestedArray("modes");
+    for (int page = 0; page < NUM_PAGES; page++) {
+        for (int ch = 0; ch < NUM_CHANNELS; ch++) {
+            for (int pot = 0; pot < NUM_POTS; pot++) {
+                modes.add(MidiManager::storedPotentiometerModes[page][ch][pot]);
             }
         }
     }
@@ -353,11 +363,27 @@ bool StorageManager::loadConfig() {
                 }
             }
         }
+    }
+
+    // Potentiometer modes
+    if (doc.containsKey("modes")) {
+        JsonArray modes = doc["modes"];
+        if (modes.size() == NUM_PAGES * NUM_CHANNELS * NUM_POTS) {
+            int idx = 0;
+            for (int page = 0; page < NUM_PAGES; page++) {
+                for (int ch = 0; ch < NUM_CHANNELS; ch++) {
+                    for (int pot = 0; pot < NUM_POTS; pot++) {
+                        MidiManager::storedPotentiometerModes[page][ch][pot] = modes[idx].as<uint8_t>();
+                        idx++;
+                    }
+                }
+            }
+        }
     } else {
         for (int page = 0; page < NUM_PAGES; page++) {
             for (int ch = 0; ch < NUM_CHANNELS; ch++) {
                 for (int pot = 0; pot < NUM_POTS; pot++) {
-                    MidiManager::storedPotentiometerDetents[page][ch][pot] = false;
+                    MidiManager::storedPotentiometerModes[page][ch][pot] = 0;
                 }
             }
         }

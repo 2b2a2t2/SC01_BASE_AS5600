@@ -2,7 +2,7 @@
 
 bool HardwareHAL::vibrationActive = false;
 unsigned long HardwareHAL::vibrationStartTime = 0;
-int HardwareHAL::currentVibrationDuration = 5;
+int HardwareHAL::currentVibrationDuration = 1;
 
 void HardwareHAL::init() {
     Wire.begin(PIN_SDA, PIN_SCL);

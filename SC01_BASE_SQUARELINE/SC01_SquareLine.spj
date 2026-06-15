@@ -75544,7 +75544,7 @@
                     "strtype": "OBJECT/Position",
                     "intarray": [
                       67,
-                      -131
+                      -127
                     ],
                     "InheritedType": 7
                   },
@@ -75554,7 +75554,7 @@
                     "strtype": "OBJECT/Size",
                     "intarray": [
                       123,
-                      50
+                      62
                     ],
                     "InheritedType": 7
                   },
@@ -76767,8 +76767,8 @@
     "theme_dark": true,
     "theme_color1": 5,
     "theme_color2": 0,
-    "uiExportFolderPath": "/Users/macadmin/Desktop/SC01_BASE_A5600/SC01_BASE_AS5600/SC01_BASE_A5600/src/UI",
-    "projectExportFolderPath": "/Users/macadmin/Desktop/SC01_BASE_A5600/SC01_BASE_AS5600/SC01_BASE_A5600",
+    "uiExportFolderPath": "/Users/macadmin/Desktop/SC01_BASE_A5600/SC01_BASE_AS5600/2048CC/src/UI",
+    "projectExportFolderPath": "/Users/macadmin/Desktop/SC01_BASE_A5600/SC01_BASE_AS5600/2048CC",
     "custom_variable_prefix": "uic",
     "backup_cnt": 230,
     "autosave_cnt": 0,

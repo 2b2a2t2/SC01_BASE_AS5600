@@ -23,6 +23,7 @@ public:
     static int currentCCBase;
     static int channelPages[NUM_CHANNELS];
     static int channelRows[NUM_CHANNELS];
+    static uint8_t storedPotentiometerModes[NUM_PAGES][NUM_CHANNELS][NUM_POTS];
     static bool storedPotentiometerDetents[NUM_PAGES][NUM_CHANNELS][NUM_POTS];
     
     // Menu & Keyboard state
@@ -76,6 +77,7 @@ public:
 
     static bool ignoreIncomingMIDI;
     static unsigned long lastExternalUpdate[20];
+    static unsigned long lastLocalUpdate[20];
     static bool needsResync;
 
 private:

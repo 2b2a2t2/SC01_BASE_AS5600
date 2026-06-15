@@ -192,6 +192,7 @@ void WebServerManager::handleWebAPI() {
                 p["value"] = MidiManager::storedMidiCCValues[page][channel][pot];
                 p["label"] = StorageManager::getLabel(page, channel, pot);
                 p["detent"] = MidiManager::storedPotentiometerDetents[page][channel][pot];
+                p["mode"] = MidiManager::storedPotentiometerModes[page][channel][pot];
             }
             String json;
             serializeJson(doc, json);
@@ -213,6 +214,7 @@ void WebServerManager::handleWebAPI() {
                         MidiManager::storedMidiCCValues[page][channel][i] = pots[i]["value"];
                         MidiManager::storedPotentiometerValues[page][channel][i] = (float)pots[i]["value"];
                         MidiManager::storedPotentiometerDetents[page][channel][i] = pots[i]["detent"].as<bool>();
+                        MidiManager::storedPotentiometerModes[page][channel][i] = pots[i]["mode"].as<uint8_t>();
                         StorageManager::saveLabel(page, channel, i, pots[i]["label"].as<String>());
                     }
                     StorageManager::saveConfig();
@@ -407,20 +409,21 @@ String WebServerManager::getIndexHtml() {
     html += ".tab-nav{display:flex;justify-content:center;gap:20px;margin-bottom:30px;border-bottom:1px solid #444;padding-bottom:10px}";
     html += ".tab-nav button{background:none;border:none;color:#888;font-size:18px;cursor:pointer;padding:5px 15px}.tab-nav button.active{color:#4CAF50;border-bottom:2px solid #4CAF50}";
     html += ".channel-bar{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:20px}.channel-btn{padding:8px 12px;background:#333;border:none;border-radius:3px;color:white;cursor:pointer}";
-    html += ".channel-btn.active{background:#2196F3}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:15px}.card{background:#2a2a2a;border-radius:8px;padding:15px;text-align:center}";
-    html += ".card input, .card textarea{width:100%;padding:8px;margin:10px 0;background:#333;border:1px solid #555;color:white;border-radius:4px;box-sizing:border-box}";
-    html += ".card textarea{height:60px;resize:vertical;font-family:inherit}.card .value{font-size:24px;font-weight:bold;color:#4CAF50;margin:10px 0}";
+    html += ".channel-btn.active{background:#2196F3}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.card{background:#2a2a2a;border-radius:6px;padding:8px;text-align:center}";
+    html += ".card input, .card textarea{width:100%;padding:4px;margin:4px 0;background:#333;border:1px solid #555;color:white;border-radius:4px;box-sizing:border-box}";
+    html += ".card h3{margin:0 0 4px 0;font-size:14px;color:#aaa}.card textarea{height:40px;resize:vertical;font-family:inherit;font-size:12px}.card .value{font-size:18px;font-weight:bold;color:#4CAF50;margin:4px 0}";
     html += ".save-btn{background:#4CAF50;color:white;border:none;padding:12px 24px;border-radius:5px;cursor:pointer;font-size:16px;margin-top:20px}";
-    html += ".status{margin-top:20px;padding:10px;background:#333;border-radius:5px;text-align:center}@media(max-width:768px){.grid{grid-template-columns:repeat(2,1fr)}}.hidden{display:none}</style>";
+    html += ".status{margin-top:20px;padding:10px;background:#333;border-radius:5px;text-align:center}.hidden{display:none}</style>";
     html += "<script>let currentPage=0,currentChannel=0;";
     html += "function showTab(t){document.querySelectorAll('.tab-content').forEach(c=>c.classList.add('hidden'));document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));";
     html += "document.getElementById(t+'-tab').classList.remove('hidden');event.target.classList.add('active');if(t==='mixer')loadMixerConfig();if(t==='track')loadTrackActions();if(t==='files')loadFiles();}";
     html += "function loadPage(page,channel){currentPage=page;currentChannel=channel;";
     html += "fetch('/api/config?page='+page+'&channel='+channel).then(r=>r.json()).then(data=>{updateGrid(data);updateActiveStates(page,channel);});}";
     html += "function updateGrid(data){const grid=document.getElementById('grid');grid.innerHTML='';data.forEach((item,index)=>{const card=document.createElement('div');card.className='card';";
-    html += "card.innerHTML='<h3>Pot '+(index+1)+'</h3><div class=\"value\" id=\"value-'+index+'\">'+item.value+'</div><textarea id=\"label-'+index+'\" placeholder=\"Label\">'+escapeHtml(item.label)+'</textarea>';";
-    html += "card.innerHTML+='<input type=\"range\" min=\"0\" max=\"127\" value=\"'+item.value+'\" oninput=\"updateValue('+index+',this.value)\">';";
-    html += "card.innerHTML+='<div style=\"margin-top:10px;display:flex;align-items:center;justify-content:center;gap:8px\"><input type=\"checkbox\" id=\"detent-'+index+'\" '+(item.detent?\"checked\":\"\")+' style=\"width:auto;margin:0;cursor:pointer\"><label for=\"detent-'+index+'\" style=\"cursor:pointer;font-size:14px;user-select:none\">Detent / Symmetric</label></div>';";
+    html += "card.innerHTML='<div style=\"display:flex;justify-content:center;align-items:center;gap:8px;margin-bottom:4px\"><h3>Pot '+(index+1)+' :</h3><div class=\"value\" id=\"value-'+index+'\" style=\"margin:0\">'+item.value+'</div></div>';";
+    html += "card.innerHTML+='<input type=\"range\" min=\"0\" max=\"127\" value=\"'+item.value+'\" oninput=\"updateValue('+index+',this.value)\" style=\"width:50%;margin:0 auto\">';";
+    html += "card.innerHTML+='<textarea id=\"label-'+index+'\" placeholder=\"Label\">'+escapeHtml(item.label)+'</textarea>';";
+    html += "card.innerHTML+='<div style=\"margin-top:4px;display:flex;flex-direction:column;align-items:center;gap:4px\"><label style=\"cursor:pointer;display:flex;align-items:center;gap:4px;font-size:14px\"><input type=\"checkbox\" id=\"detent-check-'+index+'\" '+(item.detent?'checked':'')+'>Detent</label><select id=\"mode-'+index+'\" style=\"width:100%;padding:4px;background:#333;color:white;border:1px solid #555;border-radius:4px;cursor:pointer\"><option value=\"0\" '+(item.mode===0?\"selected\":\"\")+\'>Absolute</option><option value=\"1\" '+(item.mode===1?\"selected\":\"\")+\'>Relative (7Fh/01h)</option><option value=\"2\" '+(item.mode===2?\"selected\":\"\")+\'>Relative (3Fh/41h)</option></select></div>\';";
     html += "grid.appendChild(card);});}";
     html += "function loadButtons(){fetch('/api/buttons').then(r=>r.json()).then(data=>{document.getElementById('btn-midi-ch').value=data.channel;document.getElementById('mixer-btn-note').value=data.mixerNote;const grid=document.getElementById('btn-grid');grid.innerHTML='';";
     html += "data.notes.forEach((note,i)=>{const card=document.createElement('div');card.className='card';card.innerHTML='<h3>Button '+(i+1)+'</h3><div class=\"value\" id=\"btn-val-'+i+'\">'+note+'</div><input type=\"number\" min=\"0\" max=\"127\" value=\"'+note+'\" oninput=\"document.getElementById(\\'btn-val-'+i+'\\').innerText=this.value\">';grid.appendChild(card);});});}";
@@ -463,7 +466,7 @@ String WebServerManager::getIndexHtml() {
     
     html += "function showStatus(msg){document.getElementById('status').innerHTML='<span style=\"color:#4CAF50\">✓ '+msg+'</span>';setTimeout(()=>document.getElementById('status').innerHTML='',3000);}";
     html += "function updateValue(index,value){document.getElementById('value-'+index).innerText=value;}";
-    html += "function saveConfig(){const config=[];const cards=document.querySelectorAll('#grid .card');cards.forEach((card,i)=>{config.push({value:parseInt(document.getElementById('value-'+i)?.innerText||0),label:document.getElementById('label-'+i)?.value||'',detent:document.getElementById('detent-'+i)?.checked?1:0});});";
+    html += "function saveConfig(){const config=[];const cards=document.querySelectorAll('#grid .card');cards.forEach((card,i)=>{config.push({value:parseInt(document.getElementById('value-'+i)?.innerText||0),label:document.getElementById('label-'+i)?.value||'',detent:document.getElementById('detent-check-'+i)?.checked?1:0,mode:parseInt(document.getElementById('mode-'+i)?.value||0)});});";
     html += "fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({page:currentPage,channel:currentChannel,pots:config})})";
     html += ".then(r=>r.json()).then(data=>{showStatus(data.message);});}";
     html += "function updateActiveStates(page,channel){document.querySelectorAll('.page-btn').forEach(btn=>btn.classList.remove('active'));document.querySelectorAll('.channel-btn').forEach(btn=>btn.classList.remove('active'));";

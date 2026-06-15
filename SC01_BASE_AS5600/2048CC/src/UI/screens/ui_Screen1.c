@@ -1981,9 +1981,9 @@ lv_obj_set_align( ui_Keyboard1, LV_ALIGN_CENTER );
 
 ui_TextArea1 = lv_textarea_create(ui_PanelKeyboard);
 lv_obj_set_width( ui_TextArea1, 123);
-lv_obj_set_height( ui_TextArea1, 50);
+lv_obj_set_height( ui_TextArea1, 62);
 lv_obj_set_x( ui_TextArea1, 67 );
-lv_obj_set_y( ui_TextArea1, -131 );
+lv_obj_set_y( ui_TextArea1, -127 );
 lv_obj_set_align( ui_TextArea1, LV_ALIGN_CENTER );
 lv_obj_set_style_bg_color(ui_TextArea1, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT );
 lv_obj_set_style_bg_opa(ui_TextArea1, 255, LV_PART_MAIN| LV_STATE_DEFAULT);

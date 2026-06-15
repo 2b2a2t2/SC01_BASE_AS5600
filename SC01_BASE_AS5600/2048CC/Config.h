@@ -26,7 +26,7 @@ static const int PIN_SD_MOSI = 40;
 static const int PIN_SD_CS = 41;
 
 static const int PIN_VIBRATION_MOTOR = 13;
-static const int VIBRATION_DURATION_MS = 5;
+static const int VIBRATION_DURATION_MS = 1;
 
 static const float MAX_LFO_RATE = 2.0f;
 static const float MAX_LFO_DEPTH = 5.0f;
@@ -36,7 +36,7 @@ static const int LFO_OFFSET_DETENT_MAX = 65;
 // ========== SCREEN CONFIGURATION ==========
 #define SCREEN_WIDTH 480
 #define SCREEN_HEIGHT 320
-#define SCREEN_BRIGHTNESS 50  // Backlight intensity (0 = off, 255 = max)
+#define SCREEN_BRIGHTNESS 150  // Backlight intensity (0 = off, 255 = max)
 
 // ========== SYSTEM LIMITS ==========
 #define NUM_PAGES 8
