@@ -25,6 +25,8 @@ public:
     static void updateChannelButtonColors();
     static void updatePageButtonColors();
     static void updateLFOButtonColors();
+    static void updateTrackButtonLabels();
+    static void updateTemplateButtonLabels();
     static void updateModulationUIColors();
     
     // Arcs and Labels
@@ -47,7 +49,6 @@ public:
     enum MenuState { MENU_CHANNEL, MENU_TRACK, MENU_KEYBOARD, MENU_TEMPLATES };
     static MenuState currentMenuState;
     static void setMenuState(MenuState state);
-    static void updateTrackButtonLabels();
 
     static int activeArcIndex;
     static int activeEditPage;

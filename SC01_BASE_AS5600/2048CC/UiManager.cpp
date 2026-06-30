@@ -167,7 +167,7 @@ void UiManager::init() {
 
     // Attach Event Handlers
     for (int i = 0; i < NUM_ARCS; i++) {
-        lv_obj_add_event_cb(ui_ButtonArc[i], ui_event_ButtonArcGeneric, LV_EVENT_CLICKED, NULL);
+        lv_obj_add_event_cb(ui_ButtonArc[i], ui_event_ButtonArcGeneric, LV_EVENT_ALL, NULL);
         lv_obj_add_event_cb(ui_ButtonArc[i], ui_event_ButtonArcModulationSelect, LV_EVENT_LONG_PRESSED, NULL);
         lv_obj_add_event_cb(ui_Arc[i], ui_event_ArcGeneric, LV_EVENT_VALUE_CHANGED, NULL);
     }
@@ -1200,7 +1200,9 @@ void UiManager::setMenuState(MenuState state) {
             lv_obj_clear_flag(ui_ContainerKeyboard, LV_OBJ_FLAG_HIDDEN);
             break;
         case MENU_TEMPLATES:
-            // Future implementation
+            lv_obj_clear_flag(ui_ContainerSelectLayer, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(ui_ContainerSelectTop, LV_OBJ_FLAG_HIDDEN);
+            updateTemplateButtonLabels();
             break;
     }
     
@@ -1239,6 +1241,29 @@ void UiManager::updateTrackButtonLabels() {
     }
 }
 
+void UiManager::updateTemplateButtonLabels() {
+    lv_obj_t* btns[] = { ui_ButtonTop1, ui_ButtonTop2, ui_ButtonTop3, ui_ButtonTop4 };
+    lv_obj_t* labels[] = { ui_LabelButtonTop1, ui_LabelButtonTop2, ui_LabelButtonTop3, ui_LabelButtonTop4 };
+    lv_obj_t* layerBtns[] = { ui_ButtonLayer1, ui_ButtonLayer2, ui_ButtonLayer3, ui_ButtonLayer4 };
+    lv_obj_t* layerLabels[] = { ui_LabelButtonLayer1, ui_LabelButtonLayer2, ui_LabelButtonLayer3, ui_LabelButtonLayer4 };
+
+    for (int i = 0; i < 4; i++) {
+        // Reset colors
+        lv_obj_set_style_bg_color(btns[i], lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_opa(btns[i], 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_color(layerBtns[i], lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_opa(layerBtns[i], 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+        if (labels[i]) {
+            lv_label_set_text(labels[i], MidiManager::templateLabels[i].c_str());
+        }
+        if (layerLabels[i]) {
+            lv_label_set_text(layerLabels[i], MidiManager::templateLabels[i + 4].c_str());
+        }
+    }
+}
+
+
 // ========== GLOBAL EVENT HANDLERS (Delegated from .ino) ==========
 
 void ui_event_MainMenuGeneric(lv_event_t *e) {
@@ -1251,13 +1276,23 @@ void ui_event_MainMenuGeneric(lv_event_t *e) {
 void ui_event_TrackLayerGeneric(lv_event_t *e) {
     lv_event_code_t code = lv_event_get_code(e);
     int layer = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
-    if (code == LV_EVENT_PRESSED) {
-        MidiManager::sendTrackLayerPress(layer);
-    } else if (code == LV_EVENT_RELEASED) {
-        MidiManager::sendTrackLayerRelease(layer);
-    } else if (code == LV_EVENT_CLICKED) {
-        MidiManager::activeTrackLayer = layer;
-        UiManager::updateTrackButtonLabels();
+    if (UiManager::currentMenuState == UiManager::MENU_TEMPLATES) {
+        if (code == LV_EVENT_PRESSED) {
+            MidiManager::sendTemplateActionPress(layer + 4);
+            lv_obj_set_style_bg_color(lv_event_get_target(e), lv_color_hex(0x184873), LV_PART_MAIN | LV_STATE_DEFAULT);
+        } else if (code == LV_EVENT_RELEASED) {
+            MidiManager::sendTemplateActionRelease(layer + 4);
+            lv_obj_set_style_bg_color(lv_event_get_target(e), lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+        }
+    } else {
+        if (code == LV_EVENT_PRESSED) {
+            MidiManager::sendTrackLayerPress(layer);
+        } else if (code == LV_EVENT_RELEASED) {
+            MidiManager::sendTrackLayerRelease(layer);
+        } else if (code == LV_EVENT_CLICKED) {
+            MidiManager::activeTrackLayer = layer;
+            UiManager::updateTrackButtonLabels();
+        }
     }
 }
 
@@ -1265,11 +1300,19 @@ void ui_event_TrackTopGeneric(lv_event_t *e) {
     lv_event_code_t code = lv_event_get_code(e);
     int index = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
     if (code == LV_EVENT_PRESSED) {
-        MidiManager::sendTrackActionPress(index);
+        if (UiManager::currentMenuState == UiManager::MENU_TEMPLATES) {
+            MidiManager::sendTemplateActionPress(index);
+        } else {
+            MidiManager::sendTrackActionPress(index);
+        }
         lv_obj_set_style_bg_color(lv_event_get_target(e), lv_color_hex(0x184873), LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_obj_set_style_bg_opa(lv_event_get_target(e), 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     } else if (code == LV_EVENT_RELEASED) {
-        MidiManager::sendTrackActionRelease(index);
+        if (UiManager::currentMenuState == UiManager::MENU_TEMPLATES) {
+            MidiManager::sendTemplateActionRelease(index);
+        } else {
+            MidiManager::sendTrackActionRelease(index);
+        }
         lv_obj_set_style_bg_color(lv_event_get_target(e), lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_obj_set_style_bg_opa(lv_event_get_target(e), 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     }

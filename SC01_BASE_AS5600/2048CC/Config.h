@@ -36,7 +36,7 @@ static const int LFO_OFFSET_DETENT_MAX = 65;
 // ========== SCREEN CONFIGURATION ==========
 #define SCREEN_WIDTH 480
 #define SCREEN_HEIGHT 320
-#define SCREEN_BRIGHTNESS 150  // Backlight intensity (0 = off, 255 = max)
+#define SCREEN_BRIGHTNESS 200  // Backlight intensity (0 = off, 255 = max)
 
 // ========== SYSTEM LIMITS ==========
 #define NUM_PAGES 8

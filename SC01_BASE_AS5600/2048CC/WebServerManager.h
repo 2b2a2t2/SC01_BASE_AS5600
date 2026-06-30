@@ -24,6 +24,7 @@ private:
     static void handleButtonsAPI();
     static void handleMixerConfigAPI();
     static void handleTrackActionsAPI();
+    static void handleTemplateActionsAPI();
     static void handleFileList();
     static void handleFileDownload();
     static void handleFileDelete();

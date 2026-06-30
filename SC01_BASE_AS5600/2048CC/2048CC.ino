@@ -36,6 +36,15 @@ void handleTouch(int pin, bool isTouched) {
     static unsigned long pressStartTime = 0;
 
     if (pin == 12) {
+        if (UiManager::currentMenuState == UiManager::MENU_TEMPLATES) {
+            if (isTouched) {
+                MidiManager::sendNoteOn(MidiManager::templatePin12Note, MidiManager::currentMidiChannel);
+            } else {
+                MidiManager::sendNoteOff(MidiManager::templatePin12Note, MidiManager::currentMidiChannel);
+            }
+            return;
+        }
+
         UiManager::isShiftActive = isTouched;
         
         if (isTouched) {
@@ -69,8 +78,17 @@ void handleTouch(int pin, bool isTouched) {
         return;
     }
 
-    if (isTouched) {
-        if (pin == 14) {
+    if (pin == 14) {
+        if (UiManager::currentMenuState == UiManager::MENU_TEMPLATES) {
+            if (isTouched) {
+                MidiManager::sendNoteOn(MidiManager::templatePin14Note, MidiManager::currentMidiChannel);
+            } else {
+                MidiManager::sendNoteOff(MidiManager::templatePin14Note, MidiManager::currentMidiChannel);
+            }
+            return;
+        }
+
+        if (isTouched) {
             UiManager::toggleLfoMode();
         }
     }

@@ -44,6 +44,12 @@ uint8_t MidiManager::mixerPageCCs[5][16] = { 0 };
 uint8_t MidiManager::mixerPageChannels[5][16] = { 0 };
 String MidiManager::mixerButtonLabels[5] = { "Mixer", "Pan", "Rev", "Cho", "Mod" };
 
+uint8_t MidiManager::templateNotes[8] = { 60, 62, 64, 65, 67, 69, 71, 72 };
+String MidiManager::templateLabels[8] = { "Note 1", "Note 2", "Note 3", "Note 4", "Note 5", "Note 6", "Note 7", "Note 8" };
+uint8_t MidiManager::templatePin12Note = 74;
+uint8_t MidiManager::templatePin14Note = 76;
+uint8_t MidiManager::templateArcNotes[16] = { 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51 };
+
 void MidiManager::init() {
     // Initialize Mixer Page 0 (Default Mixer)
     for (int i = 0; i < 16; i++) {
@@ -412,5 +418,36 @@ void MidiManager::setPage(int pageIndex) {
         // Store the page for the current channel
         channelPages[currentMidiChannel] = currentPage;
         StorageManager::loadLabelsForCurrentState();
+    }
+}
+
+void MidiManager::sendTemplateActionPress(int index) {
+    if (index >= 0 && index < 8) {
+        sendNoteOn(templateNotes[index], currentMidiChannel);
+        // If it's the second row (indices 4 to 7), also trigger CC page change (pages 5 to 8, which are index 4 to 7)
+        if (index >= 4 && index <= 7) {
+            setPage(index);
+            UiManager::loadValuesForCurrentState();
+            UiManager::updateParameterLabels();
+            UiManager::updatePageButtonColors();
+        }
+    }
+}
+
+void MidiManager::sendTemplateActionRelease(int index) {
+    if (index >= 0 && index < 8) {
+        sendNoteOff(templateNotes[index], currentMidiChannel);
+    }
+}
+
+void MidiManager::sendTemplateArcActionPress(int arcIndex) {
+    if (arcIndex >= 0 && arcIndex < 16) {
+        sendNoteOn(templateArcNotes[arcIndex], currentMidiChannel);
+    }
+}
+
+void MidiManager::sendTemplateArcActionRelease(int arcIndex) {
+    if (arcIndex >= 0 && arcIndex < 16) {
+        sendNoteOff(templateArcNotes[arcIndex], currentMidiChannel);
     }
 }

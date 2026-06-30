@@ -133,6 +133,15 @@ bool StorageManager::saveConfig() {
         }
     }
 
+    // Template state
+    JsonObject templateObj = doc.createNestedObject("templateActions");
+    JsonArray tLabels = templateObj.createNestedArray("labels");
+    for (int i = 0; i < 8; i++) tLabels.add(MidiManager::templateLabels[i]);
+    JsonArray tNotes = templateObj.createNestedArray("notes");
+    for (int i = 0; i < 8; i++) tNotes.add(MidiManager::templateNotes[i]);
+    templateObj["pin12Note"] = MidiManager::templatePin12Note;
+    templateObj["pin14Note"] = MidiManager::templatePin14Note;
+
     // Potentiometers CC values flat array
     JsonArray pots = doc.createNestedArray("potentiometers");
     for (int page = 0; page < NUM_PAGES; page++) {
@@ -332,6 +341,21 @@ bool StorageManager::loadConfig() {
                 MidiManager::trackActions[l][b].label = action["label"] | "";
             }
         }
+    }
+
+    // Template state
+    if (doc.containsKey("templateActions")) {
+        JsonObject templateObj = doc["templateActions"];
+        if (templateObj.containsKey("labels")) {
+            JsonArray labels = templateObj["labels"];
+            for (int i = 0; i < 8 && i < (int)labels.size(); i++) MidiManager::templateLabels[i] = labels[i].as<String>();
+        }
+        if (templateObj.containsKey("notes")) {
+            JsonArray notes = templateObj["notes"];
+            for (int i = 0; i < 8 && i < (int)notes.size(); i++) MidiManager::templateNotes[i] = notes[i].as<uint8_t>();
+        }
+        if (templateObj.containsKey("pin12Note")) MidiManager::templatePin12Note = templateObj["pin12Note"].as<uint8_t>();
+        if (templateObj.containsKey("pin14Note")) MidiManager::templatePin14Note = templateObj["pin14Note"].as<uint8_t>();
     }
 
     // Potentiometer values

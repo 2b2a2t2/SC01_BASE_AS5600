@@ -33,6 +33,13 @@ public:
     static String trackLayerLabels[4];
     static TrackActionButtonConfig trackLayerActions[4]; // 4 layer selector buttons
     
+    // Template state
+    static uint8_t templateNotes[8];
+    static String templateLabels[8];
+    static uint8_t templatePin12Note;
+    static uint8_t templatePin14Note;
+    static uint8_t templateArcNotes[16];
+    
     // Data storage
     static int storedMidiCCValues[NUM_PAGES][NUM_CHANNELS][NUM_POTS];
     static float storedPotentiometerValues[NUM_PAGES][NUM_CHANNELS][NUM_POTS];
@@ -63,6 +70,10 @@ public:
     static void sendTrackActionRelease(int buttonIndex);
     static void sendTrackLayerPress(int layerIndex);
     static void sendTrackLayerRelease(int layerIndex);
+    static void sendTemplateActionPress(int index);
+    static void sendTemplateActionRelease(int index);
+    static void sendTemplateArcActionPress(int arcIndex);
+    static void sendTemplateArcActionRelease(int arcIndex);
 
     // Helpers
     static Channel getMIDIChannel(int channelIndex);
