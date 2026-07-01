@@ -23,6 +23,10 @@ private:
     static bool vibrationActive;
     static unsigned long vibrationStartTime;
     static int currentVibrationDuration;
+
+    // Cached mux state to avoid redundant I2C writes
+    static uint8_t currentMuxAddr;
+    static uint8_t currentMuxChannel;
 };
 
 #endif // HARDWARE_HAL_H

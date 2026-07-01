@@ -18,6 +18,11 @@ void SensorManager::init() {
 }
 
 void SensorManager::update() {
+    static unsigned long lastBatchTime = 0;
+    unsigned long now = millis();
+    if (now - lastBatchTime < 5) return;
+    lastBatchTime = now;
+
     for (int i = 0; i < 20; i++) {
         uint8_t muxAddr;
         uint8_t channel;
@@ -170,12 +175,25 @@ void SensorManager::updateLfoPot(int i, float currentAngle, float angleChange) {
 }
 
 void SensorManager::updateMixerPot(int i, float currentAngle, float angleChange) {
-    float scaledChange = (angleChange / 360.0) * 127.0f;
     int mixerPage = UiManager::currentMixerPage;
-    
+    uint8_t cc = MidiManager::mixerPageCCs[mixerPage][i];
+    uint8_t channel = MidiManager::mixerPageChannels[mixerPage][i];
+
+    int detentPage = (cc - 1) / 16;
+    int detentPot = (cc - 1) % 16;
+    bool hasDetent = MidiManager::storedPotentiometerDetents[detentPage][channel][detentPot];
+
+    float sensitivity = hasDetent ? 0.4f : 1.0f;
+    float scaledChange = (angleChange / 360.0) * 127.0f * sensitivity;
+
     MidiManager::mixerPageValues[mixerPage][i] += scaledChange;
     MidiManager::mixerPageValues[mixerPage][i] = constrain(MidiManager::mixerPageValues[mixerPage][i], 0, 127);
     int midiVal = (int)MidiManager::mixerPageValues[mixerPage][i];
+
+    if (hasDetent && midiVal >= LFO_OFFSET_DETENT_MIN && midiVal <= LFO_OFFSET_DETENT_MAX) {
+        midiVal = 64;
+        MidiManager::mixerPageValues[mixerPage][i] = 64.0f;
+    }
 
     // Smooth UI Update (Every tick)
     if (UiManager::isMixerMode) {
@@ -186,9 +204,6 @@ void SensorManager::updateMixerPot(int i, float currentAngle, float angleChange)
     // MIDI and Global Sync (Only on integer change)
     if (midiVal != currentMidiCCValues[i]) {
         currentMidiCCValues[i] = midiVal;
-        
-        uint8_t cc = MidiManager::mixerPageCCs[mixerPage][i];
-        uint8_t channel = MidiManager::mixerPageChannels[mixerPage][i];
         
         MidiManager::ignoreIncomingMIDI = true;
         Control_Surface.sendCC({ cc, MidiManager::getMIDIChannel(channel) }, midiVal);

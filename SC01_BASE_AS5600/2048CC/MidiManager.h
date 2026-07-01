@@ -5,6 +5,9 @@
 #include <Control_Surface.h>
 #include "Config.h"
 
+// BLE MIDI interface — declared here so init/update live inside MidiManager
+extern BluetoothMIDI_Interface midi_ble;
+
 struct TrackActionButtonConfig {
     uint8_t type; // 0 = none, 1 = note, 2 = CC
     uint8_t value; // note or CC number
@@ -63,6 +66,7 @@ public:
     static void sendCC(int potIndex, int value);
     static void sendModulatedCC(int arcIndex, int value, int targetPage, int targetChannel);
     static void updateGlobalValueSync(uint8_t cc, uint8_t channel, int value, int initiatorIndex = -1);
+    static void updateModulation(float mixedValue);
     
     static void sendNoteOn(uint8_t note, uint8_t channel);
     static void sendNoteOff(uint8_t note, uint8_t channel);
@@ -92,6 +96,13 @@ public:
     static bool needsResync;
 
 private:
+    struct Callbacks : FineGrainedMIDI_Callbacks<Callbacks> {
+        void onControlChange(Channel channel, uint8_t controller, uint8_t value, Cable cable) {
+            Serial.printf("MIDI RX: Ch %d, CC %d, Val %d\n", channel.getRaw() + 1, controller, value);
+            MidiManager::handleIncomingMIDI(channel, controller, value);
+        }
+    };
+    static Callbacks midi_callbacks;
 };
 
 #endif // MIDI_MANAGER_H

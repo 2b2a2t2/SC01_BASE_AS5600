@@ -91,25 +91,22 @@ int UiManager::ccRowIndex = 0;
 int UiManager::currentMixerPage = 0;
 UiManager::MenuState UiManager::currentMenuState = UiManager::MENU_CHANNEL;
 
-// Externs from main sketch (temporarily)
-
-// Event Handler Externs
-extern void ui_event_ButtonChannelGeneric(lv_event_t *e);
-extern void ui_event_ButtonPageGeneric(lv_event_t *e);
-extern void ui_event_ButtonArcGeneric(lv_event_t *e);
-extern void ui_event_ButtonArcModulationSelect(lv_event_t *e);
-extern void ui_event_ArcGeneric(lv_event_t *e);
-extern void lfo1EventHandler(lv_event_t *e);
-extern void lfo2EventHandler(lv_event_t *e);
-extern void lfo3EventHandler(lv_event_t *e);
-extern void lfo4EventHandler(lv_event_t *e);
-extern void lfoMixEventHandler(lv_event_t *e);
-extern void ui_event_ButtonWifi(lv_event_t *e);
-
-extern void ui_event_MainMenuGeneric(lv_event_t *e);
-extern void ui_event_TrackLayerGeneric(lv_event_t *e);
-extern void ui_event_TrackTopGeneric(lv_event_t *e);
-extern void ui_event_KeyboardGeneric(lv_event_t *e);
+// Forward declarations for LVGL event handlers (defined at end of file)
+static void lfo1EventHandler(lv_event_t *e);
+static void lfo2EventHandler(lv_event_t *e);
+static void lfo3EventHandler(lv_event_t *e);
+static void lfo4EventHandler(lv_event_t *e);
+static void lfoMixEventHandler(lv_event_t *e);
+static void ui_event_ButtonArcGeneric(lv_event_t *e);
+static void ui_event_ButtonArcModulationSelect(lv_event_t *e);
+static void ui_event_ArcGeneric(lv_event_t *e);
+static void ui_event_ButtonChannelGeneric(lv_event_t *e);
+static void ui_event_ButtonPageGeneric(lv_event_t *e);
+static void ui_event_ButtonWifi(lv_event_t *e);
+static void ui_event_MainMenuGeneric(lv_event_t *e);
+static void ui_event_TrackLayerGeneric(lv_event_t *e);
+static void ui_event_TrackTopGeneric(lv_event_t *e);
+static void ui_event_KeyboardGeneric(lv_event_t *e);
 
 // --- LVGL Callbacks ---
 static void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p) {
@@ -249,26 +246,24 @@ void UiManager::init() {
             LfoEngine::isKilled = killing;
             
             if (killing) {
-                // Kill All: Save and set to 0
                 for (int i = 0; i < 4; i++) {
                     LfoEngine::savedMixAmounts[i] = LfoEngine::mixAmounts[i];
                     LfoEngine::mixAmounts[i] = 0;
-                    // Only update the physical pot values if we are currently looking at the mix amounts in LFO mode
                     if (isLfoMode && LfoEngine::mixMode) {
                         SensorManager::potentiometerValues[16 + i] = 0;
                         MidiManager::needsResync = true;
                     }
                 }
+                LfoEngine::refreshAnyMixActive();
             } else {
-                // Restore All
                 for (int i = 0; i < 4; i++) {
                     LfoEngine::mixAmounts[i] = LfoEngine::savedMixAmounts[i];
-                    // Only update the physical pot values if we are currently looking at the mix amounts in LFO mode
                     if (isLfoMode && LfoEngine::mixMode) {
                         SensorManager::potentiometerValues[16 + i] = LfoEngine::mixAmounts[i] * 127.0f;
                         MidiManager::needsResync = true;
                     }
                 }
+                LfoEngine::refreshAnyMixActive();
             }
             UiManager::updateParameterLabels();
         }, LV_EVENT_VALUE_CHANGED, NULL);
@@ -330,7 +325,12 @@ void UiManager::init() {
 }
 
 void UiManager::update() {
-    lv_timer_handler();
+    static unsigned long lastLvglTick = 0;
+    unsigned long now = millis();
+    if (now - lastLvglTick >= 5) {
+        lastLvglTick = now;
+        lv_timer_handler();
+    }
 }
 
 void UiManager::initArcArrays() {
@@ -375,6 +375,27 @@ void UiManager::initButtons() {
     }
 }
 
+bool UiManager::getPotDetent(int potIndex) {
+    if (potIndex < 16) {
+        if (isMixerMode) {
+            int cc = MidiManager::mixerPageCCs[currentMixerPage][potIndex];
+            int ch = MidiManager::mixerPageChannels[currentMixerPage][potIndex];
+            int p = (cc - 1) / 16;
+            int pot = (cc - 1) % 16;
+            if (p >= 0 && p < NUM_PAGES && ch >= 0 && ch < NUM_CHANNELS) {
+                return MidiManager::storedPotentiometerDetents[p][ch][pot];
+            }
+            return false;
+        }
+        return MidiManager::storedPotentiometerDetents[MidiManager::currentPage][MidiManager::currentMidiChannel][potIndex];
+    }
+    if (!isLfoMode) {
+        int rowSourcePot = ccRowIndex * 4 + (potIndex - 16);
+        return MidiManager::storedPotentiometerDetents[0][MidiManager::currentMidiChannel][rowSourcePot];
+    }
+    return false;
+}
+
 void UiManager::loadValuesForCurrentState() {
     MidiManager::loadValuesForCurrentState();
     for (int i = 0; i < NUM_POTS; i++) {
@@ -385,19 +406,10 @@ void UiManager::loadValuesForCurrentState() {
         int val = (int)SensorManager::currentPotentiometerValues[i];
         if (arc) {
             lv_arc_set_value(arc, val);
-            if (i < 16 && !isMixerMode) {
-                bool hasDetent = MidiManager::storedPotentiometerDetents[MidiManager::currentPage][MidiManager::currentMidiChannel][i];
-                if (hasDetent) {
-                    lv_arc_set_mode(arc, LV_ARC_MODE_SYMMETRICAL);
-                } else {
-                    lv_arc_set_mode(arc, LV_ARC_MODE_NORMAL);
-                }
-            } else {
-                lv_arc_set_mode(arc, LV_ARC_MODE_NORMAL);
-            }
+            lv_arc_set_mode(arc, getPotDetent(i) ? LV_ARC_MODE_SYMMETRICAL : LV_ARC_MODE_NORMAL);
         }
         if (labelVal) {
-            if (i < 16 && !isMixerMode && MidiManager::storedPotentiometerDetents[MidiManager::currentPage][MidiManager::currentMidiChannel][i]) {
+            if (getPotDetent(i)) {
                 String s = (val - 64 >= 0 ? "+" : "") + String(val - 64);
                 lv_label_set_text(labelVal, s.c_str());
             } else {
@@ -467,19 +479,10 @@ void UiManager::refreshSinglePot(int potIndex) {
         int val = (int)SensorManager::currentPotentiometerValues[potIndex];
         if (arc) {
             lv_arc_set_value(arc, val);
-            if (potIndex < 16 && !isMixerMode) {
-                bool hasDetent = MidiManager::storedPotentiometerDetents[MidiManager::currentPage][MidiManager::currentMidiChannel][potIndex];
-                if (hasDetent) {
-                    lv_arc_set_mode(arc, LV_ARC_MODE_SYMMETRICAL);
-                } else {
-                    lv_arc_set_mode(arc, LV_ARC_MODE_NORMAL);
-                }
-            } else {
-                lv_arc_set_mode(arc, LV_ARC_MODE_NORMAL);
-            }
+            lv_arc_set_mode(arc, getPotDetent(potIndex) ? LV_ARC_MODE_SYMMETRICAL : LV_ARC_MODE_NORMAL);
         }
         if (labelVal) {
-            if (potIndex < 16 && !isMixerMode && MidiManager::storedPotentiometerDetents[MidiManager::currentPage][MidiManager::currentMidiChannel][potIndex]) {
+            if (getPotDetent(potIndex)) {
                 String s = (val - 64 >= 0 ? "+" : "") + String(val - 64);
                 lv_label_set_text(labelVal, s.c_str());
             } else {
@@ -824,30 +827,28 @@ void UiManager::updateParameterLabels() {
     }
     
     // ALWAYS update Arcs 1-16 (Top grid)
-    if (isMixerMode) {
-        // Mixer Page loading for top 16
-        for (int i = 0; i < 16; i++) {
-            int val = (int)SensorManager::potentiometerValues[i];
-            lv_obj_t* arc = getArc(i);
-            lv_obj_t* labelVal = getLabelValue(i);
-            lv_obj_t* labelName = getLabelName(i);
-            if (arc) lv_arc_set_value(arc, val);
-            if (labelVal) lv_label_set_text_fmt(labelVal, "%d", val);
-            if (labelName) {
-                lv_label_set_text(labelName, MidiManager::getMixerLabel(currentMixerPage, i).c_str());
+    int baseCC = MidiManager::currentPage * 16;
+    for (int i = 0; i < 16; i++) {
+        int val = (int)SensorManager::potentiometerValues[i];
+        lv_obj_t* arc = getArc(i);
+        lv_obj_t* labelVal = getLabelValue(i);
+        lv_obj_t* labelName = getLabelName(i);
+        if (arc) {
+            lv_arc_set_value(arc, val);
+            lv_arc_set_mode(arc, getPotDetent(i) ? LV_ARC_MODE_SYMMETRICAL : LV_ARC_MODE_NORMAL);
+        }
+        if (labelVal) {
+            if (getPotDetent(i)) {
+                String s = (val - 64 >= 0 ? "+" : "") + String(val - 64);
+                lv_label_set_text(labelVal, s.c_str());
+            } else {
+                lv_label_set_text_fmt(labelVal, "%d", val);
             }
         }
-    } else {
-        // Standard CC Page loading for top 16
-        int baseCC = MidiManager::currentPage * 16;
-        for (int i = 0; i < 16; i++) {
-            int val = (int)SensorManager::potentiometerValues[i];
-            lv_obj_t* arc = getArc(i);
-            lv_obj_t* labelVal = getLabelValue(i);
-            lv_obj_t* labelName = getLabelName(i);
-            if (arc) lv_arc_set_value(arc, val);
-            if (labelVal) lv_label_set_text_fmt(labelVal, "%d", val);
-            if (labelName) {
+        if (labelName) {
+            if (isMixerMode) {
+                lv_label_set_text(labelName, MidiManager::getMixerLabel(currentMixerPage, i).c_str());
+            } else {
                 String label = MidiManager::currentArcLabels[i];
                 if (label.length() > 0 && !label.startsWith("CC ")) lv_label_set_text(labelName, label.c_str());
                 else lv_label_set_text_fmt(labelName, "CC %d", baseCC + i + 1);
@@ -857,43 +858,31 @@ void UiManager::updateParameterLabels() {
 
     // Update bottom arcs if NOT in LFO mode
     if (!isLfoMode) {
-        if (isMixerMode) {
-            int startCC = ccRowIndex * 4;
-            for (int i = 0; i < 4; i++) {
-                int potIdx = 16 + i;
-                int ccVal = (int)SensorManager::potentiometerValues[potIdx];
-                lv_obj_t* arc = getArc(potIdx);
-                lv_obj_t* labelVal = getLabelValue(potIdx);
-                lv_obj_t* labelName = getLabelName(potIdx);
-                if (arc) lv_arc_set_value(arc, ccVal);
-                if (labelVal) lv_label_set_text_fmt(labelVal, "%d", ccVal);
-                if (labelName) {
-                    String customLabel = StorageManager::getLabel(0, MidiManager::currentMidiChannel, startCC + i);
-                    if (customLabel.length() > 0 && !customLabel.startsWith("CC ")) lv_label_set_text(labelName, customLabel.c_str());
-                    else lv_label_set_text_fmt(labelName, "CC %d", startCC + i + 1);
+        int startCC = ccRowIndex * 4;
+        for (int i = 0; i < 4; i++) {
+            int potIdx = 16 + i;
+            int ccVal = (int)SensorManager::potentiometerValues[potIdx];
+            lv_obj_t* arc = getArc(potIdx);
+            lv_obj_t* labelVal = getLabelValue(potIdx);
+            lv_obj_t* labelName = getLabelName(potIdx);
+            if (arc) {
+                lv_arc_set_value(arc, ccVal);
+                lv_arc_set_mode(arc, getPotDetent(potIdx) ? LV_ARC_MODE_SYMMETRICAL : LV_ARC_MODE_NORMAL);
+            }
+            if (labelVal) {
+                if (getPotDetent(potIdx)) {
+                    String s = (ccVal - 64 >= 0 ? "+" : "") + String(ccVal - 64);
+                    lv_label_set_text(labelVal, s.c_str());
+                } else {
+                    lv_label_set_text_fmt(labelVal, "%d", ccVal);
                 }
             }
-        } else {
-            // CC Mode - Arcs 17-20 control a row of CCs
-            int startCC = ccRowIndex * 4;
-            for (int i = 0; i < 4; i++) {
-                int potIdx = 16 + i;
-                int ccVal = (int)SensorManager::potentiometerValues[potIdx];
-                
-                lv_obj_t* arc = UiManager::getArc(potIdx);
-                if (arc) lv_arc_set_value(arc, ccVal);
-                
-                lv_obj_t* labelVal = UiManager::getLabelValue(potIdx);
-                if (labelVal) lv_label_set_text_fmt(labelVal, "%d", ccVal);
-                
-                lv_obj_t* labelName = getLabelName(potIdx);
-                if (labelName) {
-                    String customLabel = StorageManager::getLabel(0, MidiManager::currentMidiChannel, startCC + i);
-                    if (customLabel.length() > 0 && !customLabel.startsWith("CC ")) {
-                        lv_label_set_text(labelName, customLabel.c_str());
-                    } else {
-                        lv_label_set_text_fmt(labelName, "CC %d", startCC + i + 1);
-                    }
+            if (labelName) {
+                String customLabel = StorageManager::getLabel(0, MidiManager::currentMidiChannel, startCC + i);
+                if (customLabel.length() > 0 && !customLabel.startsWith("CC ")) {
+                    lv_label_set_text(labelName, customLabel.c_str());
+                } else {
+                    lv_label_set_text_fmt(labelName, "CC %d", startCC + i + 1);
                 }
             }
         }
@@ -935,6 +924,8 @@ void UiManager::updateSelectedArcMod(float mixedLFOValue) {
 
 void UiManager::updateMainLFODisplay() {
     if (!lfoCanvas) return;
+    if (!LfoEngine::mainBufferDirty) return;
+    LfoEngine::mainBufferDirty = false;
 
     lv_canvas_fill_bg(lfoCanvas, lv_color_hex(0x000000), LV_OPA_COVER);
 
@@ -1264,16 +1255,16 @@ void UiManager::updateTemplateButtonLabels() {
 }
 
 
-// ========== GLOBAL EVENT HANDLERS (Delegated from .ino) ==========
+// ========== PRIMARY LVGL EVENT HANDLERS ==========
 
-void ui_event_MainMenuGeneric(lv_event_t *e) {
+static void ui_event_MainMenuGeneric(lv_event_t *e) {
     if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
         UiManager::MenuState state = (UiManager::MenuState)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
         UiManager::setMenuState(state);
     }
 }
 
-void ui_event_TrackLayerGeneric(lv_event_t *e) {
+static void ui_event_TrackLayerGeneric(lv_event_t *e) {
     lv_event_code_t code = lv_event_get_code(e);
     int layer = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
     if (UiManager::currentMenuState == UiManager::MENU_TEMPLATES) {
@@ -1296,7 +1287,7 @@ void ui_event_TrackLayerGeneric(lv_event_t *e) {
     }
 }
 
-void ui_event_TrackTopGeneric(lv_event_t *e) {
+static void ui_event_TrackTopGeneric(lv_event_t *e) {
     lv_event_code_t code = lv_event_get_code(e);
     int index = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
     if (code == LV_EVENT_PRESSED) {
@@ -1318,7 +1309,7 @@ void ui_event_TrackTopGeneric(lv_event_t *e) {
     }
 }
 
-void ui_event_KeyboardGeneric(lv_event_t *e) {
+static void ui_event_KeyboardGeneric(lv_event_t *e) {
     lv_event_code_t code = lv_event_get_code(e);
     int keyIndex = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
     uint8_t note = 60 + (MidiManager::keyboardOctave * 12) + keyIndex;
@@ -1331,5 +1322,165 @@ void ui_event_KeyboardGeneric(lv_event_t *e) {
         MidiManager::sendNoteOff(note, MidiManager::currentMidiChannel);
         lv_obj_set_style_bg_color(lv_event_get_target(e), lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_obj_set_style_bg_opa(lv_event_get_target(e), 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    }
+}
+
+static void ui_event_ButtonChannelGeneric(lv_event_t *e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t* target = lv_event_get_target(e);
+    int channelIndex = (int)(intptr_t)lv_obj_get_user_data(target) - 1;
+
+    if (code == LV_EVENT_PRESSED) {
+        uint8_t note = MidiManager::channelButtonNotes[channelIndex];
+        uint8_t channel = MidiManager::channelButtonTargetChannel;
+        Control_Surface.sendNoteOn({note, (Channel)(channel + 1)}, 127);
+    } else if (code == LV_EVENT_RELEASED) {
+        uint8_t note = MidiManager::channelButtonNotes[channelIndex];
+        uint8_t channel = MidiManager::channelButtonTargetChannel;
+        Control_Surface.sendNoteOff({note, (Channel)(channel + 1)}, 0);
+    } else if (code == LV_EVENT_CLICKED) {
+        if (channelIndex != MidiManager::currentMidiChannel) {
+            MidiManager::setMidiChannel(channelIndex);
+            if (UiManager::isLfoMode) UiManager::isMixerMode = false;
+            UiManager::updateChannelButtonColors();
+            UiManager::updatePageButtonColors();
+            UiManager::updateLFOButtonColors();
+            UiManager::loadValuesForCurrentState();
+            UiManager::updateParameterLabels();
+        }
+    }
+}
+
+static void ui_event_ButtonPageGeneric(lv_event_t *e) {
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+        int page = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
+        int newPage = page - 1;
+        if (newPage != MidiManager::currentPage) {
+            MidiManager::setPage(newPage);
+            if (UiManager::isLfoMode) UiManager::isMixerMode = false; 
+            UiManager::updatePageButtonColors();
+            UiManager::updateLFOButtonColors();
+            UiManager::loadValuesForCurrentState();
+            UiManager::updateParameterLabels();
+        }
+    }
+}
+
+static void ui_event_ButtonArcGeneric(lv_event_t *e) {
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+        int index = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
+        UiManager::setActiveArc(index);
+        UiManager::updateModulationUIColors();
+    }
+}
+
+static void ui_event_ButtonArcModulationSelect(lv_event_t *e) {
+    if (lv_event_get_code(e) == LV_EVENT_LONG_PRESSED) {
+        int index = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
+        UiManager::setModulationTarget(index);
+    }
+}
+
+static void ui_event_ArcGeneric(lv_event_t *e) {}
+
+static void lfo1EventHandler(lv_event_t *e) { 
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) { 
+        if (UiManager::currentMenuState == UiManager::MENU_KEYBOARD) {
+            MidiManager::keyboardOctave--;
+            if (MidiManager::keyboardOctave < -3) MidiManager::keyboardOctave = -3;
+            UiManager::updateLFOButtonColors();
+            return;
+        }
+        if (UiManager::isShiftActive) { UiManager::setMixerPage(1); return; }
+        if (UiManager::isLfoMode) {
+            LfoEngine::currentLfoIndex = 0; LfoEngine::mixMode = false;
+            UiManager::syncLfoArcValues();
+        } else {
+            UiManager::setCcRow(0);
+        }
+        UiManager::updateLFOButtonColors(); 
+    } 
+}
+
+static void lfo2EventHandler(lv_event_t *e) { 
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) { 
+        if (UiManager::currentMenuState == UiManager::MENU_KEYBOARD) {
+            MidiManager::keyboardOctave++;
+            if (MidiManager::keyboardOctave > 3) MidiManager::keyboardOctave = 3;
+            UiManager::updateLFOButtonColors();
+            return;
+        }
+        if (UiManager::isShiftActive) { UiManager::setMixerPage(2); return; }
+        if (UiManager::isLfoMode) {
+            LfoEngine::currentLfoIndex = 1; LfoEngine::mixMode = false;
+            UiManager::syncLfoArcValues();
+        } else {
+            UiManager::setCcRow(1);
+        }
+        UiManager::updateLFOButtonColors(); 
+    } 
+}
+
+static void lfo3EventHandler(lv_event_t *e) { 
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) { 
+        if (UiManager::currentMenuState == UiManager::MENU_KEYBOARD) {
+            MidiManager::keyboardOctave = 0;
+            UiManager::updateLFOButtonColors();
+            return;
+        }
+        if (UiManager::isShiftActive) { UiManager::setMixerPage(3); return; }
+        if (UiManager::isLfoMode) {
+            LfoEngine::currentLfoIndex = 2; LfoEngine::mixMode = false;
+            UiManager::syncLfoArcValues();
+        } else {
+            UiManager::setCcRow(2);
+        }
+        UiManager::updateLFOButtonColors(); 
+    } 
+}
+
+static void lfo4EventHandler(lv_event_t *e) { 
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) { 
+        if (UiManager::currentMenuState == UiManager::MENU_KEYBOARD) return;
+        if (UiManager::isShiftActive) { UiManager::setMixerPage(4); return; }
+        if (UiManager::isLfoMode) {
+            LfoEngine::currentLfoIndex = 3; LfoEngine::mixMode = false;
+            UiManager::syncLfoArcValues();
+        } else {
+            UiManager::setCcRow(3);
+        }
+        UiManager::updateLFOButtonColors(); 
+    } 
+}
+
+static void lfoMixEventHandler(lv_event_t *e) { 
+    lv_event_code_t code = lv_event_get_code(e);
+
+    if (code == LV_EVENT_PRESSED) {
+        if (!UiManager::isLfoMode) {
+            uint8_t note = UiManager::isMixerMode ? MidiManager::channelButtonNotes[MidiManager::currentMidiChannel] : MidiManager::mixerButtonNote;
+            Control_Surface.sendNoteOn({note, (Channel)(MidiManager::channelButtonTargetChannel + 1)}, 127);
+        }
+    } else if (code == LV_EVENT_RELEASED) {
+        if (!UiManager::isLfoMode) {
+            uint8_t note = UiManager::isMixerMode ? MidiManager::channelButtonNotes[MidiManager::currentMidiChannel] : MidiManager::mixerButtonNote;
+            Control_Surface.sendNoteOff({note, (Channel)(MidiManager::channelButtonTargetChannel + 1)}, 0);
+        }
+    } else if (code == LV_EVENT_CLICKED) { 
+        if (UiManager::isShiftActive) { UiManager::setMixerPage(0); return; }
+        if (UiManager::isLfoMode) {
+            LfoEngine::mixMode = true;
+            UiManager::syncLfoArcValues();
+        } else {
+            UiManager::toggleMixerMode();
+        }
+        UiManager::updateLFOButtonColors(); 
+    } 
+}
+
+static void ui_event_ButtonWifi(lv_event_t *e) {
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+        if (!WebServerManager::isWiFiEnabled()) WebServerManager::startWiFi();
+        else WebServerManager::stopWiFi();
     }
 }

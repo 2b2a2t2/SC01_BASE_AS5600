@@ -4,7 +4,10 @@
 #include "LfoEngine.h"
 #include "StorageManager.h"
 
+BluetoothMIDI_Interface midi_ble;
+
 // Static member definitions
+MidiManager::Callbacks MidiManager::midi_callbacks;
 int MidiManager::currentPage = 0;
 int MidiManager::currentMidiChannel = 4;
 int MidiManager::currentCCBase = 0;
@@ -51,6 +54,11 @@ uint8_t MidiManager::templatePin14Note = 76;
 uint8_t MidiManager::templateArcNotes[16] = { 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51 };
 
 void MidiManager::init() {
+    midi_ble.setName("BAT LiL");
+    midi_ble.setAsDefault();
+    Control_Surface.begin();
+    midi_ble.setCallbacks(midi_callbacks);
+
     // Initialize Mixer Page 0 (Default Mixer)
     for (int i = 0; i < 16; i++) {
         mixerPageCCs[0][i] = 7;
@@ -110,7 +118,7 @@ void MidiManager::init() {
 }
 
 void MidiManager::update() {
-    // Control_Surface.loop() is usually called in the main loop
+    midi_ble.update();
 }
 
 Channel MidiManager::getMIDIChannel(int channelIndex) {
@@ -138,6 +146,35 @@ void MidiManager::sendModulatedCC(int arcIndex, int value, int targetPage, int t
     MIDIAddress ccAddress = { (uint8_t)ccNumber, getMIDIChannel(targetChannel) };
     Control_Surface.sendCC(ccAddress, value);
     ignoreIncomingMIDI = false;
+}
+
+void MidiManager::updateModulation(float mixedValue) {
+    int arcIndex = selectedArcForModulation - 1;
+    if (arcIndex < 0 || arcIndex >= 16) return;
+
+    bool hasActiveModulation = modulationEnabled && !LfoEngine::isKilled && LfoEngine::anyMixActive;
+
+    static int lastSentModulatedValue[16] = { -1 };
+    static bool wasModulating[16] = { false };
+
+    if (hasActiveModulation) {
+        int baseValue = storedMidiCCValues[modulationTargetPage][modulationTargetChannel][arcIndex];
+        float offset = (mixedValue - 0.5f) * 127.0f;
+        int finalMidiValue = constrain((int)(baseValue + offset), 0, 127);
+
+        if (finalMidiValue != lastSentModulatedValue[arcIndex]) {
+            sendModulatedCC(arcIndex, finalMidiValue, modulationTargetPage, modulationTargetChannel);
+            lastSentModulatedValue[arcIndex] = finalMidiValue;
+        }
+        wasModulating[arcIndex] = true;
+    } else {
+        if (wasModulating[arcIndex]) {
+            int baseValue = storedMidiCCValues[modulationTargetPage][modulationTargetChannel][arcIndex];
+            sendModulatedCC(arcIndex, baseValue, modulationTargetPage, modulationTargetChannel);
+            lastSentModulatedValue[arcIndex] = baseValue;
+            wasModulating[arcIndex] = false;
+        }
+    }
 }
 
 void MidiManager::sendNoteOn(uint8_t note, uint8_t channel) {
@@ -199,17 +236,11 @@ void MidiManager::handleIncomingMIDI(Channel channel, uint8_t controller, uint8_
     if (targetChannel < 0 || targetChannel >= 16) return;
 
     // Ignore incoming MIDI for the modulated CC if modulation is active and there is non-zero LFO mix
-    if (modulationEnabled && !LfoEngine::isKilled && selectedArcForModulation >= 1) {
-        bool hasActiveModulation = (LfoEngine::mixAmounts[0] > 0.0f || 
-                                    LfoEngine::mixAmounts[1] > 0.0f || 
-                                    LfoEngine::mixAmounts[2] > 0.0f || 
-                                    LfoEngine::mixAmounts[3] > 0.0f);
-        if (hasActiveModulation) {
-            int modulatedArcIdx = selectedArcForModulation - 1;
-            int modulatedCC = (modulationTargetPage * 16) + modulatedArcIdx + 1;
-            if (controller == modulatedCC && targetChannel == modulationTargetChannel) {
-                return;
-            }
+    if (modulationEnabled && !LfoEngine::isKilled && selectedArcForModulation >= 1 && LfoEngine::anyMixActive) {
+        int modulatedArcIdx = selectedArcForModulation - 1;
+        int modulatedCC = (modulationTargetPage * 16) + modulatedArcIdx + 1;
+        if (controller == modulatedCC && targetChannel == modulationTargetChannel) {
+            return;
         }
     }
 

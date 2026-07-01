@@ -3,34 +3,37 @@
 bool HardwareHAL::vibrationActive = false;
 unsigned long HardwareHAL::vibrationStartTime = 0;
 int HardwareHAL::currentVibrationDuration = 1;
+uint8_t HardwareHAL::currentMuxAddr = 0xFF;
+uint8_t HardwareHAL::currentMuxChannel = 0xFF;
 
 void HardwareHAL::init() {
-    Wire.begin(PIN_SDA, PIN_SCL);
+    Wire.begin(PIN_SDA, PIN_SCL, 400000);
     pinMode(PIN_VIBRATION_MOTOR, OUTPUT);
     digitalWrite(PIN_VIBRATION_MOTOR, LOW);
+    currentMuxAddr = 0xFF;
+    currentMuxChannel = 0xFF;
 }
 
 void HardwareHAL::tcaSelect(uint8_t muxAddr, uint8_t channel) {
     if (channel > 7) return;
 
-    // Turn off all other multiplexers to avoid address conflicts if any
-    // (Existing logic from ino)
-    Wire.beginTransmission(TCA9548A_ADDR_1);
-    Wire.write(0x00);
-    Wire.endTransmission();
-    
-    Wire.beginTransmission(TCA9548A_ADDR_2);
-    Wire.write(0x00);
-    Wire.endTransmission();
-    
-    Wire.beginTransmission(TCA9548A_ADDR_3);
-    Wire.write(0x00);
-    Wire.endTransmission();
+    // Cache hit — same mux and channel already active
+    if (muxAddr == currentMuxAddr && channel == currentMuxChannel) return;
+
+    // Switching to a different mux — disable the old one first
+    if (muxAddr != currentMuxAddr && currentMuxAddr != 0xFF) {
+        Wire.beginTransmission(currentMuxAddr);
+        Wire.write(0x00);
+        Wire.endTransmission();
+    }
 
     // Select the desired multiplexer and channel
     Wire.beginTransmission(muxAddr);
     Wire.write(1 << channel);
     Wire.endTransmission();
+
+    currentMuxAddr = muxAddr;
+    currentMuxChannel = channel;
 }
 
 float HardwareHAL::readAngle() {

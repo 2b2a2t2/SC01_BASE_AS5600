@@ -6,7 +6,7 @@
 LfoUnit::LfoUnit() : 
     depth(0.5), rate(1.0), shape(LFO_SINE), offset(0.5), phase(0), value(0),
     waveformIndex(0), lastUpdate(0), sampleHoldValue(0), lastSampleHoldTime(0),
-    randomValue(0), lastRandomTime(0), canvas(nullptr), initialized(false) 
+    randomValue(0), lastRandomTime(0), canvas(nullptr), initialized(false), waveformDirty(true) 
 {
     for(int i=0; i<50; i++) waveformBuffer[i] = 0.5f;
 }
@@ -77,12 +77,14 @@ void LfoUnit::update(float dt) {
     
     waveformBuffer[waveformIndex] = value;
     waveformIndex = (waveformIndex + 1) % 50;
+    waveformDirty = true;
 }
 
 void LfoUnit::updateDisplay(lv_obj_t* parentButton) {
     if (!parentButton) return;
 
     if (!initialized) {
+        waveformDirty = true;
         canvas = lv_canvas_create(parentButton);
         lv_obj_set_size(canvas, 60, 40);
         lv_obj_align(canvas, LV_ALIGN_CENTER, 0, 0);
@@ -94,6 +96,9 @@ void LfoUnit::updateDisplay(lv_obj_t* parentButton) {
         line_dsc.round_end = 1;
         initialized = true;
     }
+
+    if (!waveformDirty) return;
+    waveformDirty = false;
 
     lv_canvas_fill_bg(canvas, lv_color_hex(0x000000), LV_OPA_COVER);
 
@@ -119,6 +124,8 @@ float LfoEngine::savedMixAmounts[4] = { 1.0f, 0.0f, 0.0f, 0.0f };
 bool LfoEngine::isKilled = false;
 float LfoEngine::mainWaveformBuffer[100] = { 0 };
 int LfoEngine::mainWaveformIndex = 0;
+bool LfoEngine::mainBufferDirty = false;
+bool LfoEngine::anyMixActive = true;
 
 void LfoEngine::init() {
     for(int i=0; i<4; i++) {
@@ -141,7 +148,12 @@ void LfoEngine::update() {
     }
 }
 
+void LfoEngine::refreshAnyMixActive() {
+    anyMixActive = mixAmounts[0] > 0.0f || mixAmounts[1] > 0.0f || mixAmounts[2] > 0.0f || mixAmounts[3] > 0.0f;
+}
+
 float LfoEngine::getMixedValue() {
+    refreshAnyMixActive();
     if (isKilled) return 0.5f;
     float bipolarMix = 0;
     for (int i = 0; i < 4; i++) {
@@ -156,4 +168,5 @@ float LfoEngine::getMixedValue() {
 void LfoEngine::addToMainBuffer(float val) {
     mainWaveformBuffer[mainWaveformIndex] = val;
     mainWaveformIndex = (mainWaveformIndex + 1) % 100;
+    mainBufferDirty = true;
 }

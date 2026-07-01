@@ -1,0 +1,22 @@
+include_paths:
+  - /Users/macadmin/Documents/Arduino/Libraries
+  - /Users/macadmin/Desktop/SC01_BASE_A5600
+  
+extensions:
+  - .ino
+  - .cpp
+  - .h
+  - .c
+  - .hpp
+  - .pde
+  
+exclude:
+  - .git
+  - node_modules
+  - __pycache__
+  - .DS_Store
+  - build/
+  - dist/
+  
+board: "esp32s3"
+framework: "arduino"

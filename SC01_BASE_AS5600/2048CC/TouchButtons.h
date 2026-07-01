@@ -5,6 +5,9 @@
 #include "Arduino.h"
 #include "Config.h"
 
+class UiManager;
+class MidiManager;
+
 class TouchButtons {
 private:
   static const int NUM_BUTTONS = 2;
@@ -74,6 +77,9 @@ public:
     return false;
   }
   
+  // Main touch handler — processes pin 12 (shift/mixer/template) and pin 14 (LFO/template)
+  static void handleTouch(int pin, bool isTouched);
+
   // Set custom callback for specific button
   static void setCallback(int pin, void (*callback)(int, bool)) {
     for (int i = 0; i < NUM_BUTTONS; i++) {
@@ -84,12 +90,5 @@ public:
     }
   }
 };
-
-// Static member initialization
-int TouchButtons::buttonPins[2];
-bool TouchButtons::buttonStates[2];
-bool TouchButtons::buttonDetected[2];
-void (*TouchButtons::buttonCallbacks[2])(int, bool);
-void (*TouchButtons::interruptHandlers[2])();
 
 #endif

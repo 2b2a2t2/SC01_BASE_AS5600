@@ -83,6 +83,8 @@ private:
     // LFO visualization objects
     static lv_obj_t* lfoCanvas;
     static lv_draw_line_dsc_t main_line_dsc;
+
+    static bool getPotDetent(int potIndex);
 };
 
 #endif // UI_MANAGER_H

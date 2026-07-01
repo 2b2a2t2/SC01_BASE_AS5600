@@ -49,6 +49,7 @@ private:
     lv_draw_line_dsc_t line_dsc;
     lv_color_t canvas_buffer[60 * 40];
     bool initialized;
+    bool waveformDirty;
 };
 
 class LfoEngine {
@@ -69,6 +70,10 @@ public:
     static int mainWaveformIndex;
     
     static void addToMainBuffer(float val);
+    static void refreshAnyMixActive();
+
+    static bool mainBufferDirty;
+    static bool anyMixActive;
 };
 
 #endif // LFO_ENGINE_H
