@@ -68,7 +68,8 @@ public:
     static void updateGlobalValueSync(uint8_t cc, uint8_t channel, int value, int initiatorIndex = -1);
     static void updateModulation(float mixedValue);
     
-    static void sendNoteOn(uint8_t note, uint8_t channel);
+    static uint8_t getVelocityFromCurve(uint8_t rawVelocity);
+    static void sendNoteOn(uint8_t note, uint8_t channel, uint8_t velocity = 127);
     static void sendNoteOff(uint8_t note, uint8_t channel);
     static void sendTrackActionPress(int buttonIndex);
     static void sendTrackActionRelease(int buttonIndex);

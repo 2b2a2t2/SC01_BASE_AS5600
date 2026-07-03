@@ -63,6 +63,34 @@ public:
 
     static void setMixerPage(int page);
 
+    // ---- Keyboard Submode ----
+    enum KeyboardSubmode { SUBMODE_KEYS, SUBMODE_CHORD };
+    static KeyboardSubmode keyboardSubmode;
+
+    // Keys submode state (keyboardOctave lives in MidiManager)
+    static int selectedScale;          // index into scaleNames / scalePatterns
+    static int velocityCurve;          // 0=Linear, 1=Soft, 2=Hard, 3=Fixed
+    static int modWheelValue;          // 0-127
+
+    // Chord submode state (J-6 style chord set player)
+    static int chordOctave;            // -2 to +2 (relative to middle C)
+    static int selectedChordSet;       // 0-99
+
+    static const int NUM_SCALES;
+    static const char* scaleNames[19];
+    static const int scalePatterns[19][12];
+    static const int scaleLengths[19];
+
+    static const char* noteNames[12];
+
+    // J-6 Chord Set data (loaded from SD card /chord_sets.json)
+    static String chordSetNames[100];
+    static String chordSetNotes[100][12];
+    static void loadChordSets();
+    static const int NUM_CHORD_SETS = 100;
+
+    static void updateKeyboardColors();
+
     // Global UI Object Arrays (made public for direct access by event handlers in .ino for now)
     static lv_obj_t *ui_ButtonChannel[16];
     static lv_obj_t *ui_ButtonPage[8];

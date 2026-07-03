@@ -58,7 +58,9 @@ void SensorManager::update() {
                     updateStandardPot(i, currentAngle, angleChange);
                 }
             } else {
-                if (UiManager::isLfoMode) {
+                if (UiManager::currentMenuState == UiManager::MENU_KEYBOARD) {
+                    updateKeyboardPot(i, currentAngle, angleChange);
+                } else if (UiManager::isLfoMode) {
                     updateLfoPot(i, currentAngle, angleChange);
                 } else {
                     updateRowCCPot(i, currentAngle, angleChange);
@@ -211,6 +213,107 @@ void SensorManager::updateMixerPot(int i, float currentAngle, float angleChange)
 
         MidiManager::updateGlobalValueSync(cc, channel, midiVal, i);
     }
+}
+
+void SensorManager::updateKeyboardPot(int i, float currentAngle, float angleChange) {
+    float scaledChange = (angleChange / 360.0) * 127.0f;
+    potentiometerValues[i] += scaledChange;
+    potentiometerValues[i] = constrain(potentiometerValues[i], 0, 127);
+    int midiVal = (int)potentiometerValues[i];
+
+    if (UiManager::keyboardSubmode == UiManager::SUBMODE_KEYS) {
+        if (i == 16) {
+            static float octAccum = 0;
+            octAccum += angleChange;
+            if (abs(octAccum) >= 40) {
+                int delta = (octAccum > 0) ? 1 : -1;
+                MidiManager::keyboardOctave += delta;
+                MidiManager::keyboardOctave = constrain(MidiManager::keyboardOctave, -4, 4);
+                octAccum = 0;
+                UiManager::updateParameterLabels();
+                UiManager::updateLFOButtonColors();
+            }
+        } else if (i == 17) {
+            static float scaleAccum = 0;
+            scaleAccum += angleChange;
+            if (abs(scaleAccum) >= 40) {
+                int delta = (scaleAccum > 0) ? 1 : -1;
+                UiManager::selectedScale += delta;
+                if (UiManager::selectedScale < 0) UiManager::selectedScale = UiManager::NUM_SCALES - 1;
+                if (UiManager::selectedScale >= UiManager::NUM_SCALES) UiManager::selectedScale = 0;
+                scaleAccum = 0;
+                UiManager::updateParameterLabels();
+                UiManager::updateKeyboardColors();
+            }
+        } else if (i == 18) {
+            static float velAccum = 0;
+            velAccum += angleChange;
+            if (abs(velAccum) >= 40) {
+                int delta = (velAccum > 0) ? 1 : -1;
+                UiManager::velocityCurve += delta;
+                UiManager::velocityCurve = constrain(UiManager::velocityCurve, 0, 3);
+                velAccum = 0;
+                UiManager::updateParameterLabels();
+            }
+        } else if (i == 19) {
+            static int lastModVal = -1;
+            if (abs(midiVal - lastModVal) >= 2) {
+                UiManager::modWheelValue = midiVal;
+                Control_Surface.sendCC({1, MidiManager::getMIDIChannel(MidiManager::currentMidiChannel)}, UiManager::modWheelValue);
+                lastModVal = midiVal;
+                UiManager::updateParameterLabels();
+            }
+        }
+    } else if (UiManager::keyboardSubmode == UiManager::SUBMODE_CHORD) {
+        if (i == 16) {
+            // Octave
+            static float octAccum = 0;
+            octAccum += angleChange;
+            if (abs(octAccum) >= 40) {
+                int delta = (octAccum > 0) ? 1 : -1;
+                UiManager::chordOctave += delta;
+                UiManager::chordOctave = constrain(UiManager::chordOctave, -2, 2);
+                octAccum = 0;
+                UiManager::updateParameterLabels();
+            }
+        } else if (i == 17) {
+            // Chord Set selection (0-99)
+            static float setAccum = 0;
+            setAccum += angleChange;
+            if (abs(setAccum) >= 40) {
+                int delta = (setAccum > 0) ? 1 : -1;
+                UiManager::selectedChordSet += delta;
+                if (UiManager::selectedChordSet < 0) UiManager::selectedChordSet = UiManager::NUM_CHORD_SETS - 1;
+                if (UiManager::selectedChordSet >= UiManager::NUM_CHORD_SETS) UiManager::selectedChordSet = 0;
+                setAccum = 0;
+                UiManager::updateParameterLabels();
+                UiManager::updateKeyboardColors();
+            }
+        } else if (i == 18) {
+            // Velocity curve
+            static float velAccum = 0;
+            velAccum += angleChange;
+            if (abs(velAccum) >= 40) {
+                int delta = (velAccum > 0) ? 1 : -1;
+                UiManager::velocityCurve += delta;
+                UiManager::velocityCurve = constrain(UiManager::velocityCurve, 0, 3);
+                velAccum = 0;
+                UiManager::updateParameterLabels();
+            }
+        } else if (i == 19) {
+            // Modwheel
+            static int lastModVal = -1;
+            if (abs(midiVal - lastModVal) >= 2) {
+                UiManager::modWheelValue = midiVal;
+                Control_Surface.sendCC({1, MidiManager::getMIDIChannel(MidiManager::currentMidiChannel)}, UiManager::modWheelValue);
+                lastModVal = midiVal;
+                UiManager::updateParameterLabels();
+            }
+        }
+    }
+
+    currentPotentiometerValues[i] = potentiometerValues[i];
+    UiManager::refreshSinglePot(i);
 }
 
 void SensorManager::updateRowCCPot(int i, float currentAngle, float angleChange) {

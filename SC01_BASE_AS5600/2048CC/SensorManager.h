@@ -23,6 +23,7 @@ private:
     static void updateLfoPot(int i, float currentAngle, float angleChange);
     static void updateMixerPot(int i, float currentAngle, float angleChange);
     static void updateRowCCPot(int i, float currentAngle, float angleChange);
+    static void updateKeyboardPot(int i, float currentAngle, float angleChange);
 };
 
 #endif // SENSOR_MANAGER_H

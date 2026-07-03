@@ -177,8 +177,19 @@ void MidiManager::updateModulation(float mixedValue) {
     }
 }
 
-void MidiManager::sendNoteOn(uint8_t note, uint8_t channel) {
-    Control_Surface.sendNoteOn({note, getMIDIChannel(channel)}, 127);
+uint8_t MidiManager::getVelocityFromCurve(uint8_t rawVelocity) {
+    switch (UiManager::velocityCurve) {
+        case 0: return rawVelocity;                         // Linear
+        case 1: return (rawVelocity * rawVelocity) / 127;    // Soft (exponential)
+        case 2: return 127 - ((127 - rawVelocity) * (127 - rawVelocity)) / 127; // Hard
+        case 3: return 100;                                   // Fixed
+        default: return rawVelocity;
+    }
+}
+
+void MidiManager::sendNoteOn(uint8_t note, uint8_t channel, uint8_t velocity) {
+    uint8_t vel = getVelocityFromCurve(velocity);
+    Control_Surface.sendNoteOn({note, getMIDIChannel(channel)}, vel);
 }
 
 void MidiManager::sendNoteOff(uint8_t note, uint8_t channel) {

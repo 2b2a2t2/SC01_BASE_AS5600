@@ -8,6 +8,7 @@
 #include "SensorManager.h"
 #include "StorageManager.h"
 #include "WebServerManager.h"
+#include <ArduinoJson.h>
 
 // --- LGFX Implementation for WT32-SC01 Plus ---
 class LGFX : public lgfx::LGFX_Device {
@@ -90,6 +91,359 @@ bool UiManager::previousMixerMode = false;
 int UiManager::ccRowIndex = 0;
 int UiManager::currentMixerPage = 0;
 UiManager::MenuState UiManager::currentMenuState = UiManager::MENU_CHANNEL;
+
+// ---- Keyboard Submode State ----
+UiManager::KeyboardSubmode UiManager::keyboardSubmode = UiManager::SUBMODE_KEYS;
+int UiManager::selectedScale = 0;
+int UiManager::velocityCurve = 0;
+int UiManager::modWheelValue = 64;
+int UiManager::chordOctave = 0;
+int UiManager::selectedChordSet = 0;
+
+// ---- Scale / Chord Data Tables ----
+const int UiManager::NUM_SCALES = 19;
+const char* UiManager::scaleNames[19] = {
+    "Chromatic", "Major", "Nat.Minor", "Dorian",
+    "Mixolydian", "Maj.Pent", "Min.Pent", "Blues",
+    "Harm.Min", "Mel.Min", "WholeTone", "Dim(WH)",
+    "Phryg.Dom", "Hung.Min", "DblHarm", "Maq.Hijaz",
+    "Maq.Rast", "Freygish", "Hirajoshi"
+};
+const int UiManager::scalePatterns[19][12] = {
+    {0,1,2,3,4,5,6,7,8,9,10,11}, // Chromatic (index 0)
+    {0,2,4,5,7,9,11},            // Major
+    {0,2,3,5,7,8,10},            // Natural Minor
+    {0,2,3,5,7,9,10},            // Dorian
+    {0,2,4,5,7,9,10},            // Mixolydian
+    {0,2,4,7,9},                 // Major Pentatonic
+    {0,3,5,7,10},                // Minor Pentatonic
+    {0,3,5,6,7,10},              // Blues
+    {0,2,3,5,7,8,11},            // Harmonic Minor
+    {0,2,3,5,7,9,11},            // Melodic Minor
+    {0,2,4,6,8,10},              // Whole Tone
+    {0,2,3,5,6,8,9,11},          // Diminished (Whole-Half)
+    {0,1,4,5,7,8,10},            // Phrygian Dominant
+    {0,2,3,6,7,8,11},            // Hungarian Minor
+    {0,1,4,5,7,8,11},            // Double Harmonic
+    {0,1,4,5,7,8,10},            // Maqam Hijaz
+    {0,2,4,5,7,9,10},            // Maqam Rast
+    {0,1,4,5,7,8,10},            // Freygish
+    {0,2,3,7,8}                  // Hirajoshi
+};
+const int UiManager::scaleLengths[19] = {
+    12,7,7,7,7,5,5,6,7,7,6,8,7,7,7,7,7,7,5
+};
+
+const char* UiManager::noteNames[12] = {
+    "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"
+};
+
+// ---- J-6 Chord Set Data (loaded from SD card /chord_sets.json) ----
+String UiManager::chordSetNames[100];
+String UiManager::chordSetNotes[100][12];
+
+void UiManager::loadChordSets() {
+    if (!SD.exists("/chord_sets.json")) {
+        Serial.println("ERROR: chord_sets.json not found on SD card!");
+        for (int i = 0; i < 100; i++) {
+            chordSetNames[i] = "Empty";
+            for (int j = 0; j < 12; j++) chordSetNotes[i][j] = "C";
+        }
+        return;
+    }
+    File file = SD.open("/chord_sets.json", FILE_READ);
+    if (!file) {
+        Serial.println("ERROR: Could not open chord_sets.json");
+        return;
+    }
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, file);
+    file.close();
+    if (error) {
+        Serial.print("ERROR: Failed to parse chord_sets.json: ");
+        Serial.println(error.c_str());
+        return;
+    }
+    JsonArray sets = doc["sets"];
+    if (!sets) {
+        Serial.println("ERROR: chord_sets.json missing 'sets' array");
+        return;
+    }
+    int count = min((int)sets.size(), 100);
+    for (int i = 0; i < count; i++) {
+        JsonObject setObj = sets[i];
+        chordSetNames[i] = setObj["name"].as<String>();
+        JsonArray chords = setObj["chords"];
+        for (int j = 0; j < 12; j++) {
+            if (j < (int)chords.size()) chordSetNotes[i][j] = chords[j].as<String>();
+            else chordSetNotes[i][j] = "C";
+        }
+    }
+    for (int i = count; i < 100; i++) {
+        chordSetNames[i] = "";
+        for (int j = 0; j < 12; j++) chordSetNotes[i][j] = "C";
+    }
+    Serial.printf("Loaded %d chord sets from /chord_sets.json\n", count);
+}
+
+// ---- Chord Name Parser (J-6 voicing engine) ----
+// Parses a chord name and fills the notes array with MIDI note numbers
+// relative to rootNote (MIDI). Returns number of notes (0 on error).
+
+static int parseRootFromName(const char*& p) {
+    const uint8_t rootTab[] = {0,0,2,3,5,5,7,8,8,10,10,11}; // C, C#, D, D#, E, F, F#, G, G#, A, A#, B
+    if (!p || !*p) return -1;
+    uint8_t c = p[0];
+    if (c >= 'a' && c <= 'z') c -= 32; // toupper
+    if (c < 'A' || c > 'G') return -1;
+    // Map letter to root index
+    int root;
+    switch (c) {
+        case 'C': root = 0; break;
+        case 'D': root = 2; break;
+        case 'E': root = 4; break;
+        case 'F': root = 5; break;
+        case 'G': root = 7; break;
+        case 'A': root = 9; break;
+        case 'B': root = 11; break;
+        default: return -1;
+    }
+    int consumed = 1;
+    if (p[1] == '#') { root = (root + 1) % 12; consumed = 2; }
+    else if (p[1] == 'b') { root = (root + 11) % 12; consumed = 2; }
+    p += consumed;
+    while (*p == ' ') p++; // skip spaces
+    return root;
+}
+
+// Try to find the interval pattern matching the quality string.
+// Returns number of matched chars, or 0.
+static int matchChordQuality(const char* q, int* intervals, int& numNotes, bool& omit3rd) {
+    omit3rd = false;
+    // Order matters: check longer patterns first to avoid false prefix matches
+    struct { const char* pat; int iv[8]; int n; bool om3; } patterns[] = {
+        {"13(no3)",   {0,5,7,10,14,17,21},7,1},
+        {"13(no 3)",  {0,5,7,10,14,17,21},7,1},
+        {"(no3)",     {0,4,7},3,1},
+        {"(no 3)",    {0,4,7},3,1},
+        {"Maj13",     {0,4,7,11,14,17,21},7,0},
+        {"maj13",     {0,4,7,11,14,17,21},7,0},
+        {"sus2",      {0,2,7},3,0},
+        {"sus4",      {0,5,7},3,0},
+        {"sus9/13",   {0,5,7,10,14,21},6,0},
+        {"m9/11",     {0,3,7,10,14,17},6,0},
+        {"sus4/b9",   {0,5,7,10,13},5,0},
+        {"9/#11",     {0,4,7,10,14,18},6,0},
+        {"M9/#11",    {0,4,7,11,14,18},6,0},
+        {"7/b13",     {0,4,7,10,20},5,0},
+        {"Mb5/#9",    {0,4,6,15},4,0},
+        {"7#5#9",     {0,4,8,10,15},5,0},
+        {"9sus",      {0,5,7,10,14},5,0},
+        {"13b9",      {0,4,7,10,13,17,21},7,0},
+        {"dimM7",     {0,3,6,11},4,0},
+        {"m7b5",      {0,3,6,10},4,0},
+        {"dim7",      {0,3,6,9},4,0},
+        {"m7/11",     {0,3,7,10,17},5,0},
+        {"m7/b13",    {0,3,7,10,20},5,0},
+        {"M7add6",    {0,4,7,11,9},5,0},
+        {"m7add13",   {0,3,7,10,21},5,0},
+        {"aug7",      {0,4,8,10},4,0},
+        {"7sus4",     {0,5,7,10},4,0},
+        {"7sus",      {0,5,7,10},4,0},
+        {"7#9",       {0,4,7,10,15},5,0},
+        {"7b9",       {0,4,7,10,13},5,0},
+        {"7#5",       {0,4,8,10},4,0},
+        {"7alt",      {0,4,7,10,13,15},6,0},
+        {"M7#5",      {0,4,8,11},4,0},
+        {"M7b5",      {0,4,6,11},4,0},
+        {"m7b13",     {0,3,7,10,20},5,0},
+        {"add9/b13",  {0,4,7,14,20},5,0},
+        {"sus2b5",    {0,2,6},3,0},
+        {"M9(no3)",   {0,7,11,14},4,1},
+        {"maj9",      {0,4,7,11,14},5,0},
+        {"7sus2",     {0,2,7,10},4,0},
+        {"11sus",     {0,5,7,10,14,17},6,0},
+        {"add9",      {0,4,7,14},4,0},
+        {"add11",     {0,4,7,17},4,0},
+        {"add2",      {0,2,4,7},4,0},
+        {"add13",     {0,4,7,21},4,0},
+        {"madd9",     {0,3,7,14},4,0},
+        {"mb13",      {0,3,7,20},4,0},
+        {"m7b13",     {0,3,7,10,20},5,0},
+        {"m11",       {0,3,7,10,14,17},6,0},
+        {"maj7",      {0,4,7,11},4,0},
+        {"Maj7",      {0,4,7,11},4,0},
+        {"Maj13",     {0,4,7,11,14,17,21},7,0},
+        {"6/9",       {0,4,7,9,14},5,0},
+        {"m7",        {0,3,7,10},4,0},
+        {"M7",        {0,4,7,11},4,0},
+        {"m9",        {0,3,7,10,14},5,0},
+        {"M9",        {0,4,7,11,14},5,0},
+        {"m13",       {0,3,7,10,14,17,21},7,0},
+        {"M13",       {0,4,7,11,14,17,21},7,0},
+        {"m6",        {0,3,7,9},4,0},
+        {"mb5",       {0,3,6},3,0},
+        {"#11",       {0,4,7,18},4,0},
+        {"b13",       {0,4,7,20},4,0},
+        {"dim",       {0,3,6},3,0},
+        {"aug",       {0,4,8},3,0},
+        {"sus",       {0,5,7},3,0},
+        {"maj",       {0,4,7},3,0},
+        {"m",         {0,3,7},3,0},
+        {"M",         {0,4,7},3,0},
+        {"7",         {0,4,7,10},4,0},
+        {"9",         {0,4,7,10,14},5,0},
+        {"11",        {0,4,7,10,14,17},6,0},
+        {"13",        {0,4,7,10,14,17,21},7,0},
+        {"6",         {0,4,7,9},4,0},
+        {"5",         {0,7},2,0},
+        {"4",         {0,5},2,0},
+        {"",          {0,4,7},3,0}, // default major
+    };
+    for (auto& pat : patterns) {
+        int pi = 0;
+        while (pat.pat[pi] && q[pi] && pat.pat[pi] == q[pi]) pi++;
+        if (pat.pat[pi] == '\0' || (pat.pat[pi] == ' ' && q[pi] == ' ')) {
+            // matched
+            for (int i = 0; i < pat.n; i++) intervals[i] = pat.iv[i];
+            numNotes = pat.n;
+            omit3rd = pat.om3;
+            return pi;
+        }
+    }
+    return 0;
+}
+
+// Strip trailing parenthesized content like (13), (no3), /#11 etc.
+// Returns the stripped length (characters to skip at end)
+static int stripParenthetical(const char* s) {
+    int len = strlen(s);
+    while (len > 0 && s[len-1] == ' ') len--; // strip trailing spaces
+    // Check for trailing ) - find matching (
+    if (len > 0 && s[len-1] == ')') {
+        int depth = 0;
+        for (int i = len - 1; i >= 0; i--) {
+            if (s[i] == ')') depth++;
+            else if (s[i] == '(') { depth--; if (depth == 0) return len - i; }
+        }
+    }
+    return 0;
+}
+
+static int chordNameToNotes(const char* name, int rootNote, uint8_t* notes, int maxNotes) {
+    if (!name || !*name || maxNotes < 1) return 0;
+    
+    const char* p = name;
+    int root = parseRootFromName(p);
+    if (root < 0) return 0;
+    
+    // Copy everything after root into quality buffer
+    char qualBuf[32];
+    int qi = 0;
+    for (const char* s = p; *s && qi < 31; s++) {
+        qualBuf[qi++] = *s;
+    }
+    qualBuf[qi] = '\0';
+    
+    // Handle slash: /X where X is a note letter → bass note
+    // Otherwise (/#11, /b5, etc.) keep in qualBuf for pattern matching
+    int bassRoot = -1;
+    char* slash = strchr(qualBuf, '/');
+    if (slash) {
+        const char* sp = slash + 1;
+        while (*sp == ' ') sp++;
+        if (*sp >= 'A' && *sp <= 'G') {
+            bassRoot = parseRootFromName(sp);
+            *slash = '\0';
+        }
+    }
+    
+    int baseIntervals[8];
+    int numNotes = 0;
+    bool omit3rd = false;
+    int matched = matchChordQuality(qualBuf, baseIntervals, numNotes, omit3rd);
+    
+    if (matched == 0) {
+        baseIntervals[0] = 0; baseIntervals[1] = 4; baseIntervals[2] = 7;
+        numNotes = 3;
+    }
+    
+    // Handle parenthetical extensions like (13), (11), (9)
+    int parenSkip = stripParenthetical(qualBuf);
+    if (parenSkip > 0) {
+        char inner[16];
+        int innerLen = strlen(qualBuf) - parenSkip;
+        if (innerLen > 0 && qualBuf[innerLen] == '(') {
+            int ii = 0;
+            for (int k = innerLen + 1; k < (int)strlen(qualBuf) - 1 && ii < 15; k++) {
+                if (qualBuf[k] != ' ') inner[ii++] = qualBuf[k];
+            }
+            inner[ii] = '\0';
+            if (strcmp(inner, "13") == 0) {
+                baseIntervals[numNotes++] = 21;
+            } else if (strcmp(inner, "11") == 0) {
+                baseIntervals[numNotes++] = 17;
+            } else if (strcmp(inner, "9") == 0) {
+                baseIntervals[numNotes++] = 14;
+            }
+        }
+    }
+    
+    // Handle residual content after pattern match
+    if (matched > 0) {
+        const char* residual = qualBuf + matched;
+        while (*residual == ' ') residual++;
+        if (strncmp(residual, "add", 3) == 0) {
+            int ext = atoi(residual + 3);
+            if (ext == 13) baseIntervals[numNotes++] = 21;
+            else if (ext == 11) baseIntervals[numNotes++] = 17;
+            else if (ext == 9) baseIntervals[numNotes++] = 14;
+        } else if (*residual == '/') {
+            // Handle /alteration like /b5, /#5, /b13, /#11, /b9, /#9
+            const char* a = residual + 1;
+            if (a[0] == 'b') {
+                if (strcmp(a + 1, "5") == 0) { /* b5 = dim5 = interval 6 */
+                    for (int i = 0; i < numNotes; i++) {
+                        if (baseIntervals[i] == 7) { baseIntervals[i] = 6; break; }
+                    }
+                } else if (strcmp(a + 1, "13") == 0) baseIntervals[numNotes++] = 20;
+                else if (strcmp(a + 1, "9") == 0) baseIntervals[numNotes++] = 13;
+            } else if (a[0] == '#') {
+                if (strcmp(a + 1, "5") == 0) { /* #5 = aug5 = interval 8 */
+                    for (int i = 0; i < numNotes; i++) {
+                        if (baseIntervals[i] == 7) { baseIntervals[i] = 8; break; }
+                    }
+                } else if (strcmp(a + 1, "11") == 0) baseIntervals[numNotes++] = 18;
+                else if (strcmp(a + 1, "9") == 0) baseIntervals[numNotes++] = 15;
+            }
+        }
+    }
+    
+    if (numNotes <= 0) return 0;
+    
+    int count = 0;
+    for (int i = 0; i < numNotes && count < maxNotes; i++) {
+        int note = rootNote + root + baseIntervals[i];
+        if (note < 0) note = 0;
+        if (note > 127) note = 127;
+        notes[count++] = (uint8_t)note;
+    }
+    
+    if (bassRoot >= 0) {
+        int bassNote = rootNote + bassRoot;
+        if (bassNote < 0) bassNote = 0;
+        if (bassNote > 127) bassNote = 127;
+        if (bassNote != notes[0]) {
+            while (bassNote > notes[0]) bassNote -= 12;
+            if (bassNote < 0) bassNote = 0;
+            for (int i = count; i > 0; i--) notes[i] = notes[i-1];
+            notes[0] = (uint8_t)bassNote;
+            count++;
+        }
+    }
+    
+    return count;
+}
 
 // Forward declarations for LVGL event handlers (defined at end of file)
 static void lfo1EventHandler(lv_event_t *e);
@@ -321,6 +675,7 @@ void UiManager::init() {
         lv_obj_set_user_data(kbButtons[i], (void*)(intptr_t)i);
     }
 
+    loadChordSets();
     setMenuState(MENU_CHANNEL);
 }
 
@@ -447,6 +802,11 @@ void UiManager::refreshSinglePot(int potIndex) {
     lv_obj_t* arc = getArc(potIndex);
     lv_obj_t* labelVal = getLabelValue(potIndex);
     
+    if (potIndex >= 16 && currentMenuState == MENU_KEYBOARD) {
+        // Handled entirely by updateParameterLabels
+        return;
+    }
+
     if (potIndex >= 16 && isLfoMode) {
         // Targeted LFO update
         if (LfoEngine::mixMode) {
@@ -662,14 +1022,29 @@ void UiManager::updateLFOButtonColors() {
     lv_obj_set_style_text_color(ui_LabelButtonLFOMix, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
 
     if (currentMenuState == MENU_KEYBOARD) {
-        if (ui_LabelButtonLFOMix) lv_label_set_text(ui_LabelButtonLFOMix, "Keyboard");
+        if (ui_LabelButtonLFOMix) {
+            if (keyboardSubmode == SUBMODE_KEYS) {
+                lv_label_set_text(ui_LabelButtonLFOMix, "Chord");
+            } else {
+                lv_label_set_text(ui_LabelButtonLFOMix, "Keys");
+            }
+        }
         if (ui_LabelButtonSettings1) lv_label_set_text(ui_LabelButtonSettings1, "Oct -");
         if (ui_LabelButtonSettings2) lv_label_set_text(ui_LabelButtonSettings2, "Oct +");
         if (ui_LabelButtonSettings3) lv_label_set_text(ui_LabelButtonSettings3, "Oct Reset");
-        if (ui_LabelButtonSettings4) lv_label_set_text(ui_LabelButtonSettings4, "");
+        if (ui_LabelButtonSettings4) {
+            lv_label_set_text(ui_LabelButtonSettings4, keyboardSubmode == SUBMODE_KEYS ? "Keys>>" : "Chrd>>");
+        }
         
+        // Highlight LFOMix button to indicate active submode
+        lv_color_t submodeColor = keyboardSubmode == SUBMODE_CHORD ? lv_color_hex(0xAA5500) : lv_color_hex(0x00AA55);
+        lv_obj_set_style_bg_color(ui_ButtonLFOMix, submodeColor, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_opa(ui_ButtonLFOMix, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_color(ui_LabelButtonLFOMix, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+
         // Indicate current octave (highlight if not zero)
-        if (MidiManager::keyboardOctave != 0) {
+        int oct = (keyboardSubmode == SUBMODE_CHORD) ? chordOctave : MidiManager::keyboardOctave;
+        if (oct != 0) {
             lv_obj_set_style_bg_color(ui_ButtonSettings3, lv_color_hex(0x184873), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_bg_opa(ui_ButtonSettings3, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
         }
@@ -776,6 +1151,53 @@ void UiManager::updateModulationUIColors() {
 }
 
 void UiManager::updateParameterLabels() {
+    // -- Keyboard Submode Display --
+    if (currentMenuState == MENU_KEYBOARD) {
+        // Hide arc indicators (colored arc) but keep knobs visible
+        lv_obj_t* arc17_20[] = { ui_Arc17, ui_Arc18, ui_Arc19, ui_Arc20 };
+        for (int i = 0; i < 4; i++) {
+            if (arc17_20[i]) lv_obj_set_style_arc_opa(arc17_20[i], 0, LV_PART_INDICATOR | LV_STATE_DEFAULT);
+        }
+        if (keyboardSubmode == SUBMODE_KEYS) {
+            int dispOct = MidiManager::keyboardOctave;
+            if (ui_LabelValue17) lv_label_set_text_fmt(ui_LabelValue17, "%+d", dispOct);
+            if (ui_LabelValue18) lv_label_set_text(ui_LabelValue18, scaleNames[selectedScale]);
+            const char* curves[] = { "Lin", "Soft", "Hard", "Fixd" };
+            if (ui_LabelValue19) lv_label_set_text(ui_LabelValue19, curves[velocityCurve]);
+            if (ui_LabelValue20) lv_label_set_text_fmt(ui_LabelValue20, "%d", modWheelValue);
+
+            if (ui_LabelPot17) lv_label_set_text(ui_LabelPot17, "Octave");
+            if (ui_LabelPot18) lv_label_set_text(ui_LabelPot18, "Scale");
+            if (ui_LabelPot19) lv_label_set_text(ui_LabelPot19, "Vel");
+            if (ui_LabelPot20) lv_label_set_text(ui_LabelPot20, "Mod");
+
+            if (ui_Arc17) lv_arc_set_value(ui_Arc17, constrain(map(MidiManager::keyboardOctave + 4, 0, 8, 0, 127), 0, 127));
+            if (ui_Arc18) lv_arc_set_value(ui_Arc18, constrain(map(selectedScale, 0, NUM_SCALES - 1, 0, 127), 0, 127));
+            if (ui_Arc19) lv_arc_set_value(ui_Arc19, constrain(map(velocityCurve, 0, 3, 0, 127), 0, 127));
+            if (ui_Arc20) lv_arc_set_value(ui_Arc20, constrain(modWheelValue, 0, 127));
+
+        } else if (keyboardSubmode == SUBMODE_CHORD) {
+            int setNum = selectedChordSet + 1;
+            const char* curves[] = { "Lin", "Soft", "Hard", "Fixd" };
+            if (ui_LabelValue17) lv_label_set_text_fmt(ui_LabelValue17, "%+d", chordOctave);
+            if (ui_LabelValue18) lv_label_set_text_fmt(ui_LabelValue18, "Set %d", setNum);
+            if (ui_LabelValue19) lv_label_set_text(ui_LabelValue19, curves[velocityCurve]);
+            if (ui_LabelValue20) lv_label_set_text_fmt(ui_LabelValue20, "%d", modWheelValue);
+
+            if (ui_LabelPot17) lv_label_set_text(ui_LabelPot17, "Octave");
+            if (ui_LabelPot18) lv_label_set_text(ui_LabelPot18, chordSetNames[selectedChordSet].c_str());
+            if (ui_LabelPot19) lv_label_set_text(ui_LabelPot19, "Vel");
+            if (ui_LabelPot20) lv_label_set_text(ui_LabelPot20, "Mod");
+
+            if (ui_Arc17) lv_arc_set_value(ui_Arc17, constrain(map(chordOctave + 2, 0, 4, 0, 127), 0, 127));
+            if (ui_Arc18) lv_arc_set_value(ui_Arc18, constrain(map(selectedChordSet, 0, NUM_CHORD_SETS - 1, 0, 127), 0, 127));
+            if (ui_Arc19) lv_arc_set_value(ui_Arc19, constrain(map(velocityCurve, 0, 3, 0, 127), 0, 127));
+            if (ui_Arc20) lv_arc_set_value(ui_Arc20, constrain(modWheelValue, 0, 127));
+        }
+        // Keyboard mode: arcs 1-16 are behind the keyboard panel, skip them entirely
+        return;
+    }
+
     if (isLfoMode) {
         if (LfoEngine::mixMode) {
             lv_label_set_text_fmt(ui_LabelValue17, "%d%%", (int)(LfoEngine::mixAmounts[0] * 100));
@@ -827,6 +1249,7 @@ void UiManager::updateParameterLabels() {
     }
     
     // ALWAYS update Arcs 1-16 (Top grid)
+updateArcs1to16:
     int baseCC = MidiManager::currentPage * 16;
     for (int i = 0; i < 16; i++) {
         int val = (int)SensorManager::potentiometerValues[i];
@@ -856,8 +1279,8 @@ void UiManager::updateParameterLabels() {
         }
     }
 
-    // Update bottom arcs if NOT in LFO mode
-    if (!isLfoMode) {
+    // Update bottom arcs if NOT in LFO mode and NOT in keyboard mode
+    if (!isLfoMode && currentMenuState != MENU_KEYBOARD) {
         int startCC = ccRowIndex * 4;
         for (int i = 0; i < 4; i++) {
             int potIdx = 16 + i;
@@ -885,6 +1308,49 @@ void UiManager::updateParameterLabels() {
                     lv_label_set_text_fmt(labelName, "CC %d", startCC + i + 1);
                 }
             }
+        }
+    }
+}
+
+void UiManager::updateKeyboardColors() {
+    lv_obj_t* kbButtons[] = { ui_ButtonKeyboard1, ui_ButtonKeyboard2, ui_ButtonKeyboard3, ui_ButtonKeyboard4,
+                             ui_ButtonKeyboard5, ui_ButtonKeyboard6, ui_ButtonKeyboard7, ui_ButtonKeyboard8,
+                             ui_ButtonKeyboard9, ui_ButtonKeyboard10, ui_ButtonKeyboard11, ui_ButtonKeyboard12 };
+    lv_obj_t* kbLabels[] = { ui_LabelButtonKeyboard1, ui_LabelButtonKeyboard2, ui_LabelButtonKeyboard3,
+                             ui_LabelButtonKeyboard4, ui_LabelButtonKeyboard5, ui_LabelButtonKeyboard6,
+                             ui_LabelButtonKeyboard7, ui_LabelButtonKeyboard8, ui_LabelButtonKeyboard9,
+                             ui_LabelButtonKeyboard10, ui_LabelButtonKeyboard11, ui_LabelButtonKeyboard12 };
+
+    for (int i = 0; i < 12; i++) {
+        lv_obj_set_style_bg_color(kbButtons[i], lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_opa(kbButtons[i], 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    }
+
+    if (keyboardSubmode == SUBMODE_CHORD) {
+        // Chord submode: clear borders, label keys with chord names
+        for (int i = 0; i < 12; i++) {
+            lv_obj_set_style_border_width(kbButtons[i], 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+            String chordName = chordSetNotes[selectedChordSet][i];
+            // Show shortened name (up to ~6 chars) on the button label
+            if (kbLabels[i]) lv_label_set_text(kbLabels[i], chordName.c_str());
+        }
+    } else {
+        // Keys submode: scale outline, labels show note names
+        const int* pattern = scalePatterns[selectedScale];
+        int len = scaleLengths[selectedScale];
+        for (int i = 0; i < 12; i++) {
+            bool inScale = false;
+            for (int s = 0; s < len; s++) {
+                if (pattern[s] == i) { inScale = true; break; }
+            }
+            if (inScale) {
+                lv_obj_set_style_border_color(kbButtons[i], lv_color_hex(0x00FF00), LV_PART_MAIN | LV_STATE_DEFAULT);
+                lv_obj_set_style_border_width(kbButtons[i], 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+            } else {
+                lv_obj_set_style_border_color(kbButtons[i], lv_color_hex(0xFF0000), LV_PART_MAIN | LV_STATE_DEFAULT);
+                lv_obj_set_style_border_width(kbButtons[i], 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+            }
+            if (kbLabels[i]) lv_label_set_text(kbLabels[i], noteNames[i]);
         }
     }
 }
@@ -1034,6 +1500,7 @@ void UiManager::handleKeyboardEvent(lv_event_t *e) {
 }
 
 void UiManager::toggleLfoMode() {
+    if (currentMenuState == MENU_KEYBOARD) return;
     isLfoMode = !isLfoMode;
     
     if (ui_SwitchLFOCC) {
@@ -1189,6 +1656,8 @@ void UiManager::setMenuState(MenuState state) {
             break;
         case MENU_KEYBOARD:
             lv_obj_clear_flag(ui_ContainerKeyboard, LV_OBJ_FLAG_HIDDEN);
+            updateKeyboardColors();
+            updateParameterLabels();
             break;
         case MENU_TEMPLATES:
             lv_obj_clear_flag(ui_ContainerSelectLayer, LV_OBJ_FLAG_HIDDEN);
@@ -1198,6 +1667,7 @@ void UiManager::setMenuState(MenuState state) {
     }
     
     updateLFOButtonColors(); // Refresh Settings 1/2 labels if needed
+    updateParameterLabels(); // Refresh arc labels/values
 }
 
 void UiManager::updateTrackButtonLabels() {
@@ -1309,19 +1779,91 @@ static void ui_event_TrackTopGeneric(lv_event_t *e) {
     }
 }
 
+static bool isNoteInScale(int keyIndex, int scaleIdx) {
+    const int* pattern = UiManager::scalePatterns[scaleIdx];
+    int len = UiManager::scaleLengths[scaleIdx];
+    for (int i = 0; i < len; i++) {
+        if (pattern[i] == keyIndex) return true;
+    }
+    return false;
+}
+
+static int snapToScale(int keyIndex, int scaleIdx, int dir) {
+    const int* pattern = UiManager::scalePatterns[scaleIdx];
+    int len = UiManager::scaleLengths[scaleIdx];
+    for (int offset = 0; offset < 12; offset++) {
+        int test = (keyIndex + dir * offset + 12) % 12;
+        for (int i = 0; i < len; i++) {
+            if (pattern[i] == test) return test;
+        }
+    }
+    return keyIndex;
+}
+
 static void ui_event_KeyboardGeneric(lv_event_t *e) {
     lv_event_code_t code = lv_event_get_code(e);
-    int keyIndex = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
+    lv_obj_t* target = lv_event_get_target(e);
+    int keyIndex = (int)(intptr_t)lv_obj_get_user_data(target);
+
+    if (UiManager::keyboardSubmode == UiManager::SUBMODE_CHORD) {
+        // J-6 Chord Set mode: each key triggers a chord from the selected set
+        uint8_t chordNotes[8];
+        const char* chordName = UiManager::chordSetNotes[UiManager::selectedChordSet][keyIndex].c_str();
+        int baseNote = 60 + (UiManager::chordOctave * 12);
+        int numNotes = chordNameToNotes(chordName, baseNote, chordNotes, 8);
+
+        lv_obj_t* kbAll[] = { ui_ButtonKeyboard1, ui_ButtonKeyboard2, ui_ButtonKeyboard3, ui_ButtonKeyboard4,
+                              ui_ButtonKeyboard5, ui_ButtonKeyboard6, ui_ButtonKeyboard7, ui_ButtonKeyboard8,
+                              ui_ButtonKeyboard9, ui_ButtonKeyboard10, ui_ButtonKeyboard11, ui_ButtonKeyboard12 };
+
+        if (code == LV_EVENT_PRESSED) {
+            for (int i = 0; i < numNotes; i++) {
+                MidiManager::sendNoteOn(chordNotes[i], MidiManager::currentMidiChannel, UiManager::modWheelValue);
+            }
+            // Highlight all keys whose pitch class matches a chord note
+            bool lit[12] = {false};
+            for (int i = 0; i < numNotes; i++) {
+                lit[chordNotes[i] % 12] = true;
+            }
+            for (int i = 0; i < 12; i++) {
+                if (lit[i]) {
+                    lv_obj_set_style_bg_color(kbAll[i], lv_color_hex(0x184873), LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_obj_set_style_bg_opa(kbAll[i], 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+                }
+            }
+        } else if (code == LV_EVENT_RELEASED) {
+            for (int i = 0; i < numNotes; i++) {
+                MidiManager::sendNoteOff(chordNotes[i], MidiManager::currentMidiChannel);
+            }
+            // Turn off all keys
+            for (int i = 0; i < 12; i++) {
+                lv_obj_set_style_bg_color(kbAll[i], lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+                lv_obj_set_style_bg_opa(kbAll[i], 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+            }
+        }
+        return;
+    }
+
+    // Keys submode: scale-sensitive single notes
     uint8_t note = 60 + (MidiManager::keyboardOctave * 12) + keyIndex;
-    
+    uint8_t velocity = UiManager::modWheelValue;
+
     if (code == LV_EVENT_PRESSED) {
-        MidiManager::sendNoteOn(note, MidiManager::currentMidiChannel);
-        lv_obj_set_style_bg_color(lv_event_get_target(e), lv_color_hex(0x184873), LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_bg_opa(lv_event_get_target(e), 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+        if (!isNoteInScale(keyIndex, UiManager::selectedScale)) {
+            int snapped = snapToScale(keyIndex, UiManager::selectedScale, 1);
+            note = 60 + (MidiManager::keyboardOctave * 12) + snapped;
+        }
+        MidiManager::sendNoteOn(note, MidiManager::currentMidiChannel, velocity);
+        lv_obj_set_style_bg_color(target, lv_color_hex(0x184873), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_opa(target, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     } else if (code == LV_EVENT_RELEASED) {
+        if (!isNoteInScale(keyIndex, UiManager::selectedScale)) {
+            int snapped = snapToScale(keyIndex, UiManager::selectedScale, 1);
+            note = 60 + (MidiManager::keyboardOctave * 12) + snapped;
+        }
         MidiManager::sendNoteOff(note, MidiManager::currentMidiChannel);
-        lv_obj_set_style_bg_color(lv_event_get_target(e), lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_bg_opa(lv_event_get_target(e), 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_color(target, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_opa(target, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     }
 }
 
@@ -1386,9 +1928,15 @@ static void ui_event_ArcGeneric(lv_event_t *e) {}
 static void lfo1EventHandler(lv_event_t *e) { 
     if (lv_event_get_code(e) == LV_EVENT_CLICKED) { 
         if (UiManager::currentMenuState == UiManager::MENU_KEYBOARD) {
-            MidiManager::keyboardOctave--;
-            if (MidiManager::keyboardOctave < -3) MidiManager::keyboardOctave = -3;
+            if (UiManager::keyboardSubmode == UiManager::SUBMODE_CHORD) {
+                UiManager::chordOctave--;
+                if (UiManager::chordOctave < -2) UiManager::chordOctave = -2;
+            } else {
+                MidiManager::keyboardOctave--;
+                if (MidiManager::keyboardOctave < -4) MidiManager::keyboardOctave = -4;
+            }
             UiManager::updateLFOButtonColors();
+            UiManager::updateParameterLabels();
             return;
         }
         if (UiManager::isShiftActive) { UiManager::setMixerPage(1); return; }
@@ -1405,9 +1953,15 @@ static void lfo1EventHandler(lv_event_t *e) {
 static void lfo2EventHandler(lv_event_t *e) { 
     if (lv_event_get_code(e) == LV_EVENT_CLICKED) { 
         if (UiManager::currentMenuState == UiManager::MENU_KEYBOARD) {
-            MidiManager::keyboardOctave++;
-            if (MidiManager::keyboardOctave > 3) MidiManager::keyboardOctave = 3;
+            if (UiManager::keyboardSubmode == UiManager::SUBMODE_CHORD) {
+                UiManager::chordOctave++;
+                if (UiManager::chordOctave > 2) UiManager::chordOctave = 2;
+            } else {
+                MidiManager::keyboardOctave++;
+                if (MidiManager::keyboardOctave > 4) MidiManager::keyboardOctave = 4;
+            }
             UiManager::updateLFOButtonColors();
+            UiManager::updateParameterLabels();
             return;
         }
         if (UiManager::isShiftActive) { UiManager::setMixerPage(2); return; }
@@ -1424,7 +1978,11 @@ static void lfo2EventHandler(lv_event_t *e) {
 static void lfo3EventHandler(lv_event_t *e) { 
     if (lv_event_get_code(e) == LV_EVENT_CLICKED) { 
         if (UiManager::currentMenuState == UiManager::MENU_KEYBOARD) {
-            MidiManager::keyboardOctave = 0;
+            if (UiManager::keyboardSubmode == UiManager::SUBMODE_CHORD) {
+                UiManager::chordOctave = 0;
+            } else {
+                MidiManager::keyboardOctave = 0;
+            }
             UiManager::updateLFOButtonColors();
             return;
         }
@@ -1441,7 +1999,15 @@ static void lfo3EventHandler(lv_event_t *e) {
 
 static void lfo4EventHandler(lv_event_t *e) { 
     if (lv_event_get_code(e) == LV_EVENT_CLICKED) { 
-        if (UiManager::currentMenuState == UiManager::MENU_KEYBOARD) return;
+        if (UiManager::currentMenuState == UiManager::MENU_KEYBOARD) {
+            // Toggle Keys <-> Chord
+            UiManager::keyboardSubmode = (UiManager::keyboardSubmode == UiManager::SUBMODE_KEYS)
+                ? UiManager::SUBMODE_CHORD : UiManager::SUBMODE_KEYS;
+            UiManager::updateLFOButtonColors();
+            UiManager::updateParameterLabels();
+            UiManager::updateKeyboardColors();
+            return;
+        }
         if (UiManager::isShiftActive) { UiManager::setMixerPage(4); return; }
         if (UiManager::isLfoMode) {
             LfoEngine::currentLfoIndex = 3; LfoEngine::mixMode = false;
@@ -1457,17 +2023,28 @@ static void lfoMixEventHandler(lv_event_t *e) {
     lv_event_code_t code = lv_event_get_code(e);
 
     if (code == LV_EVENT_PRESSED) {
-        if (!UiManager::isLfoMode) {
+        if (!UiManager::isLfoMode && UiManager::currentMenuState != UiManager::MENU_KEYBOARD) {
             uint8_t note = UiManager::isMixerMode ? MidiManager::channelButtonNotes[MidiManager::currentMidiChannel] : MidiManager::mixerButtonNote;
             Control_Surface.sendNoteOn({note, (Channel)(MidiManager::channelButtonTargetChannel + 1)}, 127);
         }
     } else if (code == LV_EVENT_RELEASED) {
-        if (!UiManager::isLfoMode) {
+        if (!UiManager::isLfoMode && UiManager::currentMenuState != UiManager::MENU_KEYBOARD) {
             uint8_t note = UiManager::isMixerMode ? MidiManager::channelButtonNotes[MidiManager::currentMidiChannel] : MidiManager::mixerButtonNote;
             Control_Surface.sendNoteOff({note, (Channel)(MidiManager::channelButtonTargetChannel + 1)}, 0);
         }
     } else if (code == LV_EVENT_CLICKED) { 
         if (UiManager::isShiftActive) { UiManager::setMixerPage(0); return; }
+
+        // In keyboard mode, toggle Keys/Chord submode
+        if (UiManager::currentMenuState == UiManager::MENU_KEYBOARD) {
+            UiManager::keyboardSubmode = (UiManager::keyboardSubmode == UiManager::SUBMODE_KEYS)
+                ? UiManager::SUBMODE_CHORD : UiManager::SUBMODE_KEYS;
+            UiManager::updateLFOButtonColors();
+            UiManager::updateParameterLabels();
+            UiManager::updateKeyboardColors();
+            return;
+        }
+
         if (UiManager::isLfoMode) {
             LfoEngine::mixMode = true;
             UiManager::syncLfoArcValues();
