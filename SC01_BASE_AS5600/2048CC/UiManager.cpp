@@ -139,51 +139,104 @@ const char* UiManager::noteNames[12] = {
 };
 
 // ---- J-6 Chord Set Data (loaded from SD card /chord_sets.json) ----
+// Only set *names* are kept for all 100 sets (needed by the UI selector).
+// The 12 chord strings for the currently-active set are held in chordSetNotes[12].
 String UiManager::chordSetNames[100];
-String UiManager::chordSetNotes[100][12];
+String UiManager::chordSetNotes[12];
 
+// loadChordSets() — loads only the 100 set names using a filtered parse so that
+// no full-document allocation is needed. Then immediately loads the chords for
+// the currently selected set.
 void UiManager::loadChordSets() {
     if (!SD.exists("/chord_sets.json")) {
         Serial.println("ERROR: chord_sets.json not found on SD card!");
-        for (int i = 0; i < 100; i++) {
-            chordSetNames[i] = "Empty";
-            for (int j = 0; j < 12; j++) chordSetNotes[i][j] = "C";
-        }
+        for (int i = 0; i < 100; i++) chordSetNames[i] = "Empty";
+        for (int j = 0; j < 12; j++) chordSetNotes[j] = "C";
         return;
     }
     File file = SD.open("/chord_sets.json", FILE_READ);
     if (!file) {
-        Serial.println("ERROR: Could not open chord_sets.json");
+        Serial.println("ERROR: Could not open chord_sets.json for names");
+        for (int i = 0; i < 100; i++) chordSetNames[i] = "Empty";
+        for (int j = 0; j < 12; j++) chordSetNotes[j] = "C";
         return;
     }
+
+    // Use a filter document so ArduinoJson only allocates memory for "name" fields.
+    JsonDocument filterDoc;
+    filterDoc["sets"][0]["name"] = true;
+
     JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, file);
+    DeserializationError error = deserializeJson(doc, file,
+        DeserializationOption::Filter(filterDoc));
     file.close();
+
     if (error) {
-        Serial.print("ERROR: Failed to parse chord_sets.json: ");
+        Serial.print("ERROR: Failed to parse chord_sets.json (names): ");
+        Serial.println(error.c_str());
+        for (int i = 0; i < 100; i++) chordSetNames[i] = "Empty";
+    } else {
+        JsonArray sets = doc["sets"];
+        int count = sets ? min((int)sets.size(), 100) : 0;
+        for (int i = 0; i < count; i++)
+            chordSetNames[i] = sets[i]["name"].as<String>();
+        for (int i = count; i < 100; i++)
+            chordSetNames[i] = "";
+        Serial.printf("Loaded %d chord set names from /chord_sets.json\n", count);
+    }
+
+    // Load chords for the currently-selected set
+    loadChordSetNotes(selectedChordSet);
+}
+
+// loadChordSetNotes() — loads the 12 chords for one set from the SD card.
+// Uses a small filtered JsonDocument so only one set entry is allocated.
+void UiManager::loadChordSetNotes(int setIndex) {
+    // Clear first
+    for (int j = 0; j < 12; j++) chordSetNotes[j] = "C";
+
+    if (!SD.exists("/chord_sets.json")) {
+        Serial.println("ERROR: chord_sets.json not found (loadChordSetNotes)");
+        return;
+    }
+    File file = SD.open("/chord_sets.json", FILE_READ);
+    if (!file) {
+        Serial.println("ERROR: Could not open chord_sets.json (loadChordSetNotes)");
+        return;
+    }
+
+    // Filter: only read the "chords" field (skip "name", "id", etc.)
+    JsonDocument filterDoc;
+    filterDoc["sets"][0]["chords"] = true;
+
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, file,
+        DeserializationOption::Filter(filterDoc));
+    file.close();
+
+    if (error) {
+        Serial.print("ERROR: Failed to parse chord_sets.json (chords): ");
         Serial.println(error.c_str());
         return;
     }
+
     JsonArray sets = doc["sets"];
-    if (!sets) {
-        Serial.println("ERROR: chord_sets.json missing 'sets' array");
+    if (!sets || setIndex < 0 || setIndex >= (int)sets.size()) {
+        Serial.printf("WARN: chord set index %d out of range\n", setIndex);
         return;
     }
-    int count = min((int)sets.size(), 100);
-    for (int i = 0; i < count; i++) {
-        JsonObject setObj = sets[i];
-        chordSetNames[i] = setObj["name"].as<String>();
-        JsonArray chords = setObj["chords"];
-        for (int j = 0; j < 12; j++) {
-            if (j < (int)chords.size()) chordSetNotes[i][j] = chords[j].as<String>();
-            else chordSetNotes[i][j] = "C";
-        }
+
+    JsonArray chords = sets[setIndex]["chords"];
+    if (!chords) {
+        Serial.printf("WARN: no chords array for set %d\n", setIndex);
+        return;
     }
-    for (int i = count; i < 100; i++) {
-        chordSetNames[i] = "";
-        for (int j = 0; j < 12; j++) chordSetNotes[i][j] = "C";
+
+    for (int j = 0; j < 12; j++) {
+        if (j < (int)chords.size()) chordSetNotes[j] = chords[j].as<String>();
+        else chordSetNotes[j] = "C";
     }
-    Serial.printf("Loaded %d chord sets from /chord_sets.json\n", count);
+    Serial.printf("Loaded chords for set %d (%s)\n", setIndex, chordSetNames[setIndex].c_str());
 }
 
 // ---- Chord Name Parser (J-6 voicing engine) ----
@@ -1033,7 +1086,7 @@ void UiManager::updateLFOButtonColors() {
         if (ui_LabelButtonSettings2) lv_label_set_text(ui_LabelButtonSettings2, "Oct +");
         if (ui_LabelButtonSettings3) lv_label_set_text(ui_LabelButtonSettings3, "Oct Reset");
         if (ui_LabelButtonSettings4) {
-            lv_label_set_text(ui_LabelButtonSettings4, keyboardSubmode == SUBMODE_KEYS ? "Keys>>" : "Chrd>>");
+            lv_label_set_text(ui_LabelButtonSettings4, keyboardSubmode == SUBMODE_KEYS ? "Chrd>>" : "Keys>>");
         }
         
         // Highlight LFOMix button to indicate active submode
@@ -1153,11 +1206,6 @@ void UiManager::updateModulationUIColors() {
 void UiManager::updateParameterLabels() {
     // -- Keyboard Submode Display --
     if (currentMenuState == MENU_KEYBOARD) {
-        // Hide arc indicators (colored arc) but keep knobs visible
-        lv_obj_t* arc17_20[] = { ui_Arc17, ui_Arc18, ui_Arc19, ui_Arc20 };
-        for (int i = 0; i < 4; i++) {
-            if (arc17_20[i]) lv_obj_set_style_arc_opa(arc17_20[i], 0, LV_PART_INDICATOR | LV_STATE_DEFAULT);
-        }
         if (keyboardSubmode == SUBMODE_KEYS) {
             int dispOct = MidiManager::keyboardOctave;
             if (ui_LabelValue17) lv_label_set_text_fmt(ui_LabelValue17, "%+d", dispOct);
@@ -1176,23 +1224,32 @@ void UiManager::updateParameterLabels() {
             if (ui_Arc19) lv_arc_set_value(ui_Arc19, constrain(map(velocityCurve, 0, 3, 0, 127), 0, 127));
             if (ui_Arc20) lv_arc_set_value(ui_Arc20, constrain(modWheelValue, 0, 127));
 
+            if (ui_Arc20) {
+                lv_arc_set_mode(ui_Arc20, LV_ARC_MODE_NORMAL);
+                lv_obj_set_style_arc_opa(ui_Arc20, 255, LV_PART_INDICATOR | LV_STATE_DEFAULT);
+            }
         } else if (keyboardSubmode == SUBMODE_CHORD) {
             int setNum = selectedChordSet + 1;
-            const char* curves[] = { "Lin", "Soft", "Hard", "Fixd" };
             if (ui_LabelValue17) lv_label_set_text_fmt(ui_LabelValue17, "%+d", chordOctave);
             if (ui_LabelValue18) lv_label_set_text_fmt(ui_LabelValue18, "Set %d", setNum);
-            if (ui_LabelValue19) lv_label_set_text(ui_LabelValue19, curves[velocityCurve]);
-            if (ui_LabelValue20) lv_label_set_text_fmt(ui_LabelValue20, "%d", modWheelValue);
+            if (ui_LabelValue19) lv_label_set_text(ui_LabelValue19, "");
+            if (ui_LabelValue20) lv_label_set_text(ui_LabelValue20, "");
 
             if (ui_LabelPot17) lv_label_set_text(ui_LabelPot17, "Octave");
+            // LabelPot18 shows the chord set name (acts as a title/label for the selected set)
             if (ui_LabelPot18) lv_label_set_text(ui_LabelPot18, chordSetNames[selectedChordSet].c_str());
-            if (ui_LabelPot19) lv_label_set_text(ui_LabelPot19, "Vel");
-            if (ui_LabelPot20) lv_label_set_text(ui_LabelPot20, "Mod");
+            if (ui_LabelPot19) lv_label_set_text(ui_LabelPot19, "");
+            if (ui_LabelPot20) lv_label_set_text(ui_LabelPot20, "");
 
             if (ui_Arc17) lv_arc_set_value(ui_Arc17, constrain(map(chordOctave + 2, 0, 4, 0, 127), 0, 127));
             if (ui_Arc18) lv_arc_set_value(ui_Arc18, constrain(map(selectedChordSet, 0, NUM_CHORD_SETS - 1, 0, 127), 0, 127));
-            if (ui_Arc19) lv_arc_set_value(ui_Arc19, constrain(map(velocityCurve, 0, 3, 0, 127), 0, 127));
-            if (ui_Arc20) lv_arc_set_value(ui_Arc20, constrain(modWheelValue, 0, 127));
+            if (ui_Arc19) lv_arc_set_value(ui_Arc19, 0);
+            if (ui_Arc20) lv_arc_set_value(ui_Arc20, 0);
+
+            if (ui_Arc20) {
+                lv_arc_set_mode(ui_Arc20, LV_ARC_MODE_NORMAL);
+                lv_obj_set_style_arc_opa(ui_Arc20, 255, LV_PART_INDICATOR | LV_STATE_DEFAULT);
+            }
         }
         // Keyboard mode: arcs 1-16 are behind the keyboard panel, skip them entirely
         return;
@@ -1330,9 +1387,8 @@ void UiManager::updateKeyboardColors() {
         // Chord submode: clear borders, label keys with chord names
         for (int i = 0; i < 12; i++) {
             lv_obj_set_style_border_width(kbButtons[i], 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-            String chordName = chordSetNotes[selectedChordSet][i];
-            // Show shortened name (up to ~6 chars) on the button label
-            if (kbLabels[i]) lv_label_set_text(kbLabels[i], chordName.c_str());
+            // chordSetNotes[12] always holds the active set's chords
+            if (kbLabels[i]) lv_label_set_text(kbLabels[i], chordSetNotes[i].c_str());
         }
     } else {
         // Keys submode: scale outline, labels show note names
@@ -1655,6 +1711,7 @@ void UiManager::setMenuState(MenuState state) {
             updateTrackButtonLabels();
             break;
         case MENU_KEYBOARD:
+            keyboardSubmode = SUBMODE_KEYS;
             lv_obj_clear_flag(ui_ContainerKeyboard, LV_OBJ_FLAG_HIDDEN);
             updateKeyboardColors();
             updateParameterLabels();
@@ -1808,38 +1865,23 @@ static void ui_event_KeyboardGeneric(lv_event_t *e) {
     if (UiManager::keyboardSubmode == UiManager::SUBMODE_CHORD) {
         // J-6 Chord Set mode: each key triggers a chord from the selected set
         uint8_t chordNotes[8];
-        const char* chordName = UiManager::chordSetNotes[UiManager::selectedChordSet][keyIndex].c_str();
+        // chordSetNotes[12] always holds the active set's chords
+        const char* chordName = UiManager::chordSetNotes[keyIndex].c_str();
         int baseNote = 60 + (UiManager::chordOctave * 12);
         int numNotes = chordNameToNotes(chordName, baseNote, chordNotes, 8);
-
-        lv_obj_t* kbAll[] = { ui_ButtonKeyboard1, ui_ButtonKeyboard2, ui_ButtonKeyboard3, ui_ButtonKeyboard4,
-                              ui_ButtonKeyboard5, ui_ButtonKeyboard6, ui_ButtonKeyboard7, ui_ButtonKeyboard8,
-                              ui_ButtonKeyboard9, ui_ButtonKeyboard10, ui_ButtonKeyboard11, ui_ButtonKeyboard12 };
 
         if (code == LV_EVENT_PRESSED) {
             for (int i = 0; i < numNotes; i++) {
                 MidiManager::sendNoteOn(chordNotes[i], MidiManager::currentMidiChannel, UiManager::modWheelValue);
             }
-            // Highlight all keys whose pitch class matches a chord note
-            bool lit[12] = {false};
-            for (int i = 0; i < numNotes; i++) {
-                lit[chordNotes[i] % 12] = true;
-            }
-            for (int i = 0; i < 12; i++) {
-                if (lit[i]) {
-                    lv_obj_set_style_bg_color(kbAll[i], lv_color_hex(0x184873), LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_obj_set_style_bg_opa(kbAll[i], 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-                }
-            }
+            lv_obj_set_style_bg_color(target, lv_color_hex(0x184873), LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_bg_opa(target, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
         } else if (code == LV_EVENT_RELEASED) {
             for (int i = 0; i < numNotes; i++) {
                 MidiManager::sendNoteOff(chordNotes[i], MidiManager::currentMidiChannel);
             }
-            // Turn off all keys
-            for (int i = 0; i < 12; i++) {
-                lv_obj_set_style_bg_color(kbAll[i], lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
-                lv_obj_set_style_bg_opa(kbAll[i], 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-            }
+            lv_obj_set_style_bg_color(target, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_bg_opa(target, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
         }
         return;
     }

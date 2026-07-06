@@ -84,9 +84,11 @@ public:
     static const char* noteNames[12];
 
     // J-6 Chord Set data (loaded from SD card /chord_sets.json)
+    // Only names for all sets (needed by UI selector) + chords for the active set
     static String chordSetNames[100];
-    static String chordSetNotes[100][12];
-    static void loadChordSets();
+    static String chordSetNotes[12]; // Only the 12 chords of the currently-selected set
+    static void loadChordSets();     // Loads all 100 names (names only)
+    static void loadChordSetNotes(int setIndex); // Loads chords for one set
     static const int NUM_CHORD_SETS = 100;
 
     static void updateKeyboardColors();

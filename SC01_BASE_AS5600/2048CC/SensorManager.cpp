@@ -279,6 +279,9 @@ void SensorManager::updateKeyboardPot(int i, float currentAngle, float angleChan
         } else if (i == 17) {
             // Chord Set selection (0-99)
             static float setAccum = 0;
+            static unsigned long lastSetChangeTime = 0;
+            static bool pendingChordSetLoad = false;
+
             setAccum += angleChange;
             if (abs(setAccum) >= 40) {
                 int delta = (setAccum > 0) ? 1 : -1;
@@ -286,30 +289,22 @@ void SensorManager::updateKeyboardPot(int i, float currentAngle, float angleChan
                 if (UiManager::selectedChordSet < 0) UiManager::selectedChordSet = UiManager::NUM_CHORD_SETS - 1;
                 if (UiManager::selectedChordSet >= UiManager::NUM_CHORD_SETS) UiManager::selectedChordSet = 0;
                 setAccum = 0;
+                // Update the labels (index + name) instantly every step
                 UiManager::updateParameterLabels();
+                // Defer the SD read + keyboard redraw until the encoder has been
+                // idle for 400 ms — prevents blocking during fast scrolling
+                lastSetChangeTime = millis();
+                pendingChordSetLoad = true;
+            }
+
+            // Check if the debounce period has elapsed and a load is pending
+            if (pendingChordSetLoad && (millis() - lastSetChangeTime >= 400)) {
+                UiManager::loadChordSetNotes(UiManager::selectedChordSet);
                 UiManager::updateKeyboardColors();
-            }
-        } else if (i == 18) {
-            // Velocity curve
-            static float velAccum = 0;
-            velAccum += angleChange;
-            if (abs(velAccum) >= 40) {
-                int delta = (velAccum > 0) ? 1 : -1;
-                UiManager::velocityCurve += delta;
-                UiManager::velocityCurve = constrain(UiManager::velocityCurve, 0, 3);
-                velAccum = 0;
-                UiManager::updateParameterLabels();
-            }
-        } else if (i == 19) {
-            // Modwheel
-            static int lastModVal = -1;
-            if (abs(midiVal - lastModVal) >= 2) {
-                UiManager::modWheelValue = midiVal;
-                Control_Surface.sendCC({1, MidiManager::getMIDIChannel(MidiManager::currentMidiChannel)}, UiManager::modWheelValue);
-                lastModVal = midiVal;
-                UiManager::updateParameterLabels();
+                pendingChordSetLoad = false;
             }
         }
+        // i=18, i=19 unassigned
     }
 
     currentPotentiometerValues[i] = potentiometerValues[i];
