@@ -143,6 +143,22 @@ const char* UiManager::noteNames[12] = {
 // The 12 chord strings for the currently-active set are held in chordSetNotes[12].
 String UiManager::chordSetNames[100];
 String UiManager::chordSetNotes[12];
+int UiManager::selectedChordType = 0;
+int UiManager::selectedProgression = 0;
+int UiManager::progressionStep = 0;
+int UiManager::progressionRoot = 4; // default E
+int UiManager::nextChordPad = -1;
+int UiManager::selectedInversion = 0;
+int UiManager::selectedVoicing = 0;
+String UiManager::chordTypeNames[11];
+int UiManager::chordTypeIntervals[11][8];
+int UiManager::chordTypeNoteCounts[11];
+String UiManager::progressionNames[6];
+int UiManager::progressionSteps[6][8];
+int UiManager::progressionLengths[6];
+String UiManager::inversionNames[3];
+int UiManager::inversionRotations[3];
+String UiManager::voicingNames[4];
 
 // loadChordSets() — loads only the 100 set names using a filtered parse so that
 // no full-document allocation is needed. Then immediately loads the chords for
@@ -187,6 +203,12 @@ void UiManager::loadChordSets() {
 
     // Load chords for the currently-selected set
     loadChordSetNotes(selectedChordSet);
+
+    // Parse metadata sections for chord_type / progression / inversion / voicing submodes
+    parseChordTypes();
+    parseProgressions();
+    parseInversions();
+    parseVoicings();
 }
 
 // loadChordSetNotes() — loads the 12 chords for one set from the SD card.
@@ -237,6 +259,242 @@ void UiManager::loadChordSetNotes(int setIndex) {
         else chordSetNotes[j] = "C";
     }
     Serial.printf("Loaded chords for set %d (%s)\n", setIndex, chordSetNames[setIndex].c_str());
+}
+
+// ========== Chord Type / Progression / Inversion / Voicing parsers ==========
+
+void UiManager::parseChordTypes() {
+    if (!SD.exists("/chord_sets.json")) return;
+    File file = SD.open("/chord_sets.json", FILE_READ);
+    if (!file) return;
+
+    JsonDocument filter;
+    filter["chord_types"][0]["name"] = true;
+    filter["chord_types"][0]["intervals"] = true;
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, file, DeserializationOption::Filter(filter));
+    file.close();
+    if (err) { Serial.println("ERROR: parseChordTypes failed"); return; }
+
+    JsonArray arr = doc["chord_types"];
+    int count = arr.size();
+    if (count > NUM_CHORD_TYPES) count = NUM_CHORD_TYPES;
+    for (int i = 0; i < count; i++) {
+        chordTypeNames[i] = arr[i]["name"].as<String>();
+        JsonArray iv = arr[i]["intervals"];
+        int n = iv.size();
+        if (n > 8) n = 8;
+        for (int j = 0; j < n; j++) chordTypeIntervals[i][j] = iv[j].as<int>();
+        chordTypeNoteCounts[i] = n;
+    }
+    for (int i = count; i < NUM_CHORD_TYPES; i++) {
+        chordTypeNames[i] = "";
+        chordTypeNoteCounts[i] = 0;
+    }
+    Serial.printf("Parsed %d chord types\n", count);
+}
+
+void UiManager::parseProgressions() {
+    if (!SD.exists("/chord_sets.json")) return;
+    File file = SD.open("/chord_sets.json", FILE_READ);
+    if (!file) return;
+
+    JsonDocument filter;
+    filter["progressions"][0]["name"] = true;
+    filter["progressions"][0]["pattern"] = true;
+    filter["roman_numeral_offsets"] = true;
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, file, DeserializationOption::Filter(filter));
+    file.close();
+    if (err) { Serial.println("ERROR: parseProgressions failed"); return; }
+
+    // Build roman numeral lookup table
+    struct { const char* sym; int offset; } romanTab[] = {
+        {"i",0},{"I",0},{"II",2},{"ii",2},{"IIm",2},{"iim",2},
+        {"III",3},{"iii",3},{"iv",5},{"IV",5},
+        {"v",7},{"V",7},{"vi",8},{"VI",8},
+        {"vii",10},{"VII",10},{"bII",1},{"bIII",3},{"bVI",8},{"bVII",10},
+        {NULL,0}
+    };
+    // Also check for user-defined overrides from roman_numeral_offsets
+    JsonObject offsets = doc["roman_numeral_offsets"];
+
+    JsonArray arr = doc["progressions"];
+    int count = arr.size();
+    if (count > NUM_PROGRESSIONS) count = NUM_PROGRESSIONS;
+    for (int i = 0; i < count; i++) {
+        progressionNames[i] = arr[i]["name"].as<String>();
+        JsonArray pat = arr[i]["pattern"];
+        int n = pat.size();
+        if (n > 8) n = 8;
+        for (int j = 0; j < n; j++) {
+            const char* sym = pat[j].as<const char*>();
+            int off = -1;
+            // Check user-defined map first
+            if (!offsets.isNull()) {
+                JsonVariant v = offsets[sym];
+                if (!v.isNull()) off = v.as<int>();
+            }
+            // Fallback to hardcoded table
+            if (off < 0) {
+                for (int t = 0; romanTab[t].sym; t++) {
+                    if (strcmp(sym, romanTab[t].sym) == 0) { off = romanTab[t].offset; break; }
+                }
+            }
+            progressionSteps[i][j] = (off >= 0) ? off : 0;
+        }
+        progressionLengths[i] = n;
+    }
+    for (int i = count; i < NUM_PROGRESSIONS; i++) {
+        progressionNames[i] = "";
+        progressionLengths[i] = 0;
+    }
+    Serial.printf("Parsed %d progressions\n", count);
+}
+
+void UiManager::parseInversions() {
+    if (!SD.exists("/chord_sets.json")) return;
+    File file = SD.open("/chord_sets.json", FILE_READ);
+    if (!file) return;
+
+    JsonDocument filter;
+    filter["inversions"][0]["name"] = true;
+    filter["inversions"][0]["rotation"] = true;
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, file, DeserializationOption::Filter(filter));
+    file.close();
+    if (err) { Serial.println("ERROR: parseInversions failed"); return; }
+
+    JsonArray arr = doc["inversions"];
+    int count = arr.size();
+    if (count > NUM_INVERSIONS) count = NUM_INVERSIONS;
+    for (int i = 0; i < count; i++) {
+        inversionNames[i] = arr[i]["name"].as<String>();
+        inversionRotations[i] = arr[i]["rotation"].as<int>();
+    }
+    for (int i = count; i < NUM_INVERSIONS; i++) {
+        inversionNames[i] = "";
+        inversionRotations[i] = 0;
+    }
+    Serial.printf("Parsed %d inversions\n", count);
+}
+
+void UiManager::parseVoicings() {
+    if (!SD.exists("/chord_sets.json")) return;
+    File file = SD.open("/chord_sets.json", FILE_READ);
+    if (!file) return;
+
+    JsonDocument filter;
+    filter["voicings"][0]["name"] = true;
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, file, DeserializationOption::Filter(filter));
+    file.close();
+    if (err) { Serial.println("ERROR: parseVoicings failed"); return; }
+
+    JsonArray arr = doc["voicings"];
+    int count = arr.size();
+    if (count > NUM_VOICINGS) count = NUM_VOICINGS;
+    for (int i = 0; i < count; i++) {
+        voicingNames[i] = arr[i]["name"].as<String>();
+    }
+    for (int i = count; i < NUM_VOICINGS; i++) {
+        voicingNames[i] = "";
+    }
+    Serial.printf("Parsed %d voicings\n", count);
+}
+
+// ========== Chord Builder (from interval types) ==========
+
+int UiManager::buildChordFromType(int chordTypeIdx, int rootNote, int inversion, int voicing, uint8_t* notes, int maxNotes) {
+    if (chordTypeIdx < 0 || chordTypeIdx >= NUM_CHORD_TYPES) return 0;
+    int n = chordTypeNoteCounts[chordTypeIdx];
+    if (n <= 0 || n > maxNotes) return 0;
+
+    // Build base notes from intervals
+    for (int i = 0; i < n; i++) {
+        int note = rootNote + chordTypeIntervals[chordTypeIdx][i];
+        if (note < 0) note = 0;
+        if (note > 127) note = 127;
+        notes[i] = (uint8_t)note;
+    }
+    int numNotes = n;
+
+    // Apply inversion
+    numNotes = applyInversion(notes, numNotes, inversion);
+
+    // Apply voicing
+    numNotes = applyVoicing(notes, numNotes, voicing);
+
+    return numNotes;
+}
+
+int UiManager::applyInversion(uint8_t* notes, int numNotes, int inv) {
+    if (numNotes < 2 || inv <= 0) return numNotes;
+    int rot = inv % numNotes; // clamp rotation to note count
+    if (rot == 0) return numNotes;
+
+    // Rotate: first `rot` notes move to the top, transposed up an octave
+    uint8_t tmp[8];
+    for (int i = 0; i < numNotes; i++) tmp[i] = notes[i];
+
+    for (int i = 0; i < numNotes; i++) {
+        int src = (i + rot) % numNotes;
+        notes[i] = tmp[src];
+        if (src < rot) notes[i] += 12; // wrap-around notes get +12
+    }
+    return numNotes;
+}
+
+int UiManager::applyVoicing(uint8_t* notes, int numNotes, int voicingId) {
+    switch (voicingId) {
+        case 0: // Close — no change
+            return numNotes;
+        case 1: // OctaveSpread — move 3rd (index 1) or 7th (index 3) up +12
+            if (numNotes >= 4) {
+                notes[3] += 12; // move 7th up
+            } else if (numNotes >= 2) {
+                notes[1] += 12; // move 3rd up
+            }
+            return numNotes;
+        case 2: // Rootless — drop root (index 0)
+            if (numNotes <= 1) return numNotes;
+            for (int i = 1; i < numNotes; i++) notes[i - 1] = notes[i];
+            return numNotes - 1;
+        case 3: { // Cluster — rebuild from tight intervals [0,1,6]
+            if (numNotes < 1) return 0;
+            int root = notes[0] % 12;
+            int base = notes[0] - root; // lock to octave of original root
+            int cluster[] = {0, 1, 6};
+            for (int i = 0; i < 3 && i < 8; i++) {
+                int note = base + cluster[i];
+                if (note > 127) note = 127;
+                notes[i] = (uint8_t)note;
+            }
+            return 3;
+        }
+    }
+    return numNotes;
+}
+
+int UiManager::computeNextChordPad() {
+    if (keyboardSubmode == SUBMODE_CHORD_TYPE) {
+        // Suggest 5th up from last-played root; if none played yet, default C→G
+        if (nextChordPad < 0) return 7; // G (5th up from C)
+        return (nextChordPad + 7) % 12;
+    } else if (keyboardSubmode == SUBMODE_PROGRESSION) {
+        // Current step determines the highlighted pad
+        if (selectedProgression < 0 || selectedProgression >= NUM_PROGRESSIONS) return -1;
+        int len = progressionLengths[selectedProgression];
+        if (len <= 0) return -1;
+        int step = progressionStep % len;
+        int offset = progressionSteps[selectedProgression][step];
+        return (progressionRoot + offset) % 12;
+    }
+    return -1;
 }
 
 // ---- Chord Name Parser (J-6 voicing engine) ----
@@ -1075,28 +1333,36 @@ void UiManager::updateLFOButtonColors() {
     lv_obj_set_style_text_color(ui_LabelButtonLFOMix, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
 
     if (currentMenuState == MENU_KEYBOARD) {
+        // ButtonLFOMix always returns to Keys mode
         if (ui_LabelButtonLFOMix) {
-            if (keyboardSubmode == SUBMODE_KEYS) {
-                lv_label_set_text(ui_LabelButtonLFOMix, "Chord");
-            } else {
-                lv_label_set_text(ui_LabelButtonLFOMix, "Keys");
-            }
+            lv_label_set_text(ui_LabelButtonLFOMix, keyboardSubmode == SUBMODE_KEYS ? "Keys" : "Keys");
         }
         if (ui_LabelButtonSettings1) lv_label_set_text(ui_LabelButtonSettings1, "Oct -");
         if (ui_LabelButtonSettings2) lv_label_set_text(ui_LabelButtonSettings2, "Oct +");
         if (ui_LabelButtonSettings3) lv_label_set_text(ui_LabelButtonSettings3, "Oct Reset");
         if (ui_LabelButtonSettings4) {
-            lv_label_set_text(ui_LabelButtonSettings4, keyboardSubmode == SUBMODE_KEYS ? "Chrd>>" : "Keys>>");
+            const char* nextLabel = "Chrd";
+            if (keyboardSubmode == SUBMODE_KEYS) nextLabel = "Chrd";
+            else if (keyboardSubmode == SUBMODE_CHORD) nextLabel = "Type>";
+            else if (keyboardSubmode == SUBMODE_CHORD_TYPE) nextLabel = "Prog>";
+            else if (keyboardSubmode == SUBMODE_PROGRESSION) nextLabel = "Chrd";
+            lv_label_set_text(ui_LabelButtonSettings4, nextLabel);
         }
         
-        // Highlight LFOMix button to indicate active submode
-        lv_color_t submodeColor = keyboardSubmode == SUBMODE_CHORD ? lv_color_hex(0xAA5500) : lv_color_hex(0x00AA55);
-        lv_obj_set_style_bg_color(ui_ButtonLFOMix, submodeColor, LV_PART_MAIN | LV_STATE_DEFAULT);
+        // Highlight the active submode: LFOMix for Keys, Settings4 for chord submodes
+        bool isKeyMode = (keyboardSubmode == SUBMODE_KEYS);
+        lv_color_t keyColor = lv_color_hex(0x00AA55);
+        lv_color_t chordColor = lv_color_hex(0xAA5500);
+        lv_obj_set_style_bg_color(ui_ButtonLFOMix, isKeyMode ? keyColor : lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_obj_set_style_bg_opa(ui_ButtonLFOMix, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_color(ui_ButtonSettings4, isKeyMode ? lv_color_hex(0x000000) : chordColor, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_opa(ui_ButtonSettings4, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_obj_set_style_text_color(ui_LabelButtonLFOMix, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_color(ui_LabelButtonSettings4, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
 
         // Indicate current octave (highlight if not zero)
-        int oct = (keyboardSubmode == SUBMODE_CHORD) ? chordOctave : MidiManager::keyboardOctave;
+        bool isChordSubmode = (keyboardSubmode == SUBMODE_CHORD || keyboardSubmode == SUBMODE_CHORD_TYPE || keyboardSubmode == SUBMODE_PROGRESSION);
+        int oct = isChordSubmode ? chordOctave : MidiManager::keyboardOctave;
         if (oct != 0) {
             lv_obj_set_style_bg_color(ui_ButtonSettings3, lv_color_hex(0x184873), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_bg_opa(ui_ButtonSettings3, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -1236,7 +1502,6 @@ void UiManager::updateParameterLabels() {
             if (ui_LabelValue20) lv_label_set_text(ui_LabelValue20, "");
 
             if (ui_LabelPot17) lv_label_set_text(ui_LabelPot17, "Octave");
-            // LabelPot18 shows the chord set name (acts as a title/label for the selected set)
             if (ui_LabelPot18) lv_label_set_text(ui_LabelPot18, chordSetNames[selectedChordSet].c_str());
             if (ui_LabelPot19) lv_label_set_text(ui_LabelPot19, "");
             if (ui_LabelPot20) lv_label_set_text(ui_LabelPot20, "");
@@ -1245,6 +1510,48 @@ void UiManager::updateParameterLabels() {
             if (ui_Arc18) lv_arc_set_value(ui_Arc18, constrain(map(selectedChordSet, 0, NUM_CHORD_SETS - 1, 0, 127), 0, 127));
             if (ui_Arc19) lv_arc_set_value(ui_Arc19, 0);
             if (ui_Arc20) lv_arc_set_value(ui_Arc20, 0);
+
+            if (ui_Arc20) {
+                lv_arc_set_mode(ui_Arc20, LV_ARC_MODE_NORMAL);
+                lv_obj_set_style_arc_opa(ui_Arc20, 255, LV_PART_INDICATOR | LV_STATE_DEFAULT);
+            }
+        } else if (keyboardSubmode == SUBMODE_CHORD_TYPE) {
+            // Pots: 16=Octave, 17=Type, 18=Inversion, 19=Voicing
+            if (ui_LabelValue17) lv_label_set_text_fmt(ui_LabelValue17, "%+d", chordOctave);
+            if (ui_LabelValue18) lv_label_set_text(ui_LabelValue18, chordTypeNames[selectedChordType].c_str());
+            if (ui_LabelValue19) lv_label_set_text(ui_LabelValue19, inversionNames[selectedInversion].c_str());
+            if (ui_LabelValue20) lv_label_set_text(ui_LabelValue20, voicingNames[selectedVoicing].c_str());
+
+            if (ui_LabelPot17) lv_label_set_text(ui_LabelPot17, "Octave");
+            if (ui_LabelPot18) lv_label_set_text(ui_LabelPot18, "Type");
+            if (ui_LabelPot19) lv_label_set_text(ui_LabelPot19, "Invert");
+            if (ui_LabelPot20) lv_label_set_text(ui_LabelPot20, "Voice");
+
+            if (ui_Arc17) lv_arc_set_value(ui_Arc17, constrain(map(chordOctave + 2, 0, 4, 0, 127), 0, 127));
+            if (ui_Arc18) lv_arc_set_value(ui_Arc18, constrain(map(selectedChordType, 0, NUM_CHORD_TYPES - 1, 0, 127), 0, 127));
+            if (ui_Arc19) lv_arc_set_value(ui_Arc19, constrain(map(selectedInversion, 0, NUM_INVERSIONS - 1, 0, 127), 0, 127));
+            if (ui_Arc20) lv_arc_set_value(ui_Arc20, constrain(map(selectedVoicing, 0, NUM_VOICINGS - 1, 0, 127), 0, 127));
+
+            if (ui_Arc20) {
+                lv_arc_set_mode(ui_Arc20, LV_ARC_MODE_NORMAL);
+                lv_obj_set_style_arc_opa(ui_Arc20, 255, LV_PART_INDICATOR | LV_STATE_DEFAULT);
+            }
+        } else if (keyboardSubmode == SUBMODE_PROGRESSION) {
+            // Pots: 16=Octave, 17=Progression, 18=Root Key, 19=Inversion
+            if (ui_LabelValue17) lv_label_set_text_fmt(ui_LabelValue17, "%+d", chordOctave);
+            if (ui_LabelValue18) lv_label_set_text(ui_LabelValue18, progressionNames[selectedProgression].c_str());
+            if (ui_LabelValue19) lv_label_set_text(ui_LabelValue19, noteNames[progressionRoot]);
+            if (ui_LabelValue20) lv_label_set_text(ui_LabelValue20, inversionNames[selectedInversion].c_str());
+
+            if (ui_LabelPot17) lv_label_set_text(ui_LabelPot17, "Octave");
+            if (ui_LabelPot18) lv_label_set_text(ui_LabelPot18, "Prog");
+            if (ui_LabelPot19) lv_label_set_text(ui_LabelPot19, "Key");
+            if (ui_LabelPot20) lv_label_set_text(ui_LabelPot20, "Invert");
+
+            if (ui_Arc17) lv_arc_set_value(ui_Arc17, constrain(map(chordOctave + 2, 0, 4, 0, 127), 0, 127));
+            if (ui_Arc18) lv_arc_set_value(ui_Arc18, constrain(map(selectedProgression, 0, NUM_PROGRESSIONS - 1, 0, 127), 0, 127));
+            if (ui_Arc19) lv_arc_set_value(ui_Arc19, constrain(map(progressionRoot, 0, 11, 0, 127), 0, 127));
+            if (ui_Arc20) lv_arc_set_value(ui_Arc20, constrain(map(selectedInversion, 0, NUM_INVERSIONS - 1, 0, 127), 0, 127));
 
             if (ui_Arc20) {
                 lv_arc_set_mode(ui_Arc20, LV_ARC_MODE_NORMAL);
@@ -1387,8 +1694,20 @@ void UiManager::updateKeyboardColors() {
         // Chord submode: clear borders, label keys with chord names
         for (int i = 0; i < 12; i++) {
             lv_obj_set_style_border_width(kbButtons[i], 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-            // chordSetNotes[12] always holds the active set's chords
             if (kbLabels[i]) lv_label_set_text(kbLabels[i], chordSetNotes[i].c_str());
+        }
+    } else if (keyboardSubmode == SUBMODE_CHORD_TYPE || keyboardSubmode == SUBMODE_PROGRESSION) {
+        // Chord Type / Progression submode: label keys with note names, highlight nextChordPad
+        nextChordPad = computeNextChordPad();
+        for (int i = 0; i < 12; i++) {
+            if (i == nextChordPad) {
+                lv_obj_set_style_border_color(kbButtons[i], lv_color_hex(0x00FF00), LV_PART_MAIN | LV_STATE_DEFAULT);
+                lv_obj_set_style_border_width(kbButtons[i], 3, LV_PART_MAIN | LV_STATE_DEFAULT);
+            } else {
+                lv_obj_set_style_border_width(kbButtons[i], 1, LV_PART_MAIN | LV_STATE_DEFAULT);
+                lv_obj_set_style_border_color(kbButtons[i], lv_color_hex(0x333333), LV_PART_MAIN | LV_STATE_DEFAULT);
+            }
+            if (kbLabels[i]) lv_label_set_text(kbLabels[i], noteNames[i]);
         }
     } else {
         // Keys submode: scale outline, labels show note names
@@ -1861,25 +2180,71 @@ static void ui_event_KeyboardGeneric(lv_event_t *e) {
     lv_event_code_t code = lv_event_get_code(e);
     lv_obj_t* target = lv_event_get_target(e);
     int keyIndex = (int)(intptr_t)lv_obj_get_user_data(target);
+    uint8_t chordNotes[8];
 
     if (UiManager::keyboardSubmode == UiManager::SUBMODE_CHORD) {
-        // J-6 Chord Set mode: each key triggers a chord from the selected set
-        uint8_t chordNotes[8];
-        // chordSetNotes[12] always holds the active set's chords
         const char* chordName = UiManager::chordSetNotes[keyIndex].c_str();
         int baseNote = 60 + (UiManager::chordOctave * 12);
         int numNotes = chordNameToNotes(chordName, baseNote, chordNotes, 8);
 
         if (code == LV_EVENT_PRESSED) {
-            for (int i = 0; i < numNotes; i++) {
+            for (int i = 0; i < numNotes; i++)
                 MidiManager::sendNoteOn(chordNotes[i], MidiManager::currentMidiChannel, UiManager::modWheelValue);
-            }
             lv_obj_set_style_bg_color(target, lv_color_hex(0x184873), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_bg_opa(target, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
         } else if (code == LV_EVENT_RELEASED) {
-            for (int i = 0; i < numNotes; i++) {
+            for (int i = 0; i < numNotes; i++)
                 MidiManager::sendNoteOff(chordNotes[i], MidiManager::currentMidiChannel);
-            }
+            lv_obj_set_style_bg_color(target, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_bg_opa(target, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+        }
+        return;
+    }
+
+    if (UiManager::keyboardSubmode == UiManager::SUBMODE_CHORD_TYPE) {
+        // Chord Type mode: play selected chord type at pressed root
+        int baseNote = 60 + (UiManager::chordOctave * 12) + keyIndex;
+        int numNotes = UiManager::buildChordFromType(UiManager::selectedChordType, baseNote,
+            UiManager::selectedInversion, UiManager::selectedVoicing, chordNotes, 8);
+
+        if (code == LV_EVENT_PRESSED) {
+            for (int i = 0; i < numNotes; i++)
+                MidiManager::sendNoteOn(chordNotes[i], MidiManager::currentMidiChannel, UiManager::modWheelValue);
+            lv_obj_set_style_bg_color(target, lv_color_hex(0x184873), LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_bg_opa(target, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+            // Advance next chord suggestion
+            UiManager::nextChordPad = (keyIndex + 7) % 12;
+            UiManager::updateKeyboardColors();
+        } else if (code == LV_EVENT_RELEASED) {
+            for (int i = 0; i < numNotes; i++)
+                MidiManager::sendNoteOff(chordNotes[i], MidiManager::currentMidiChannel);
+            lv_obj_set_style_bg_color(target, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_bg_opa(target, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+        }
+        return;
+    }
+
+    if (UiManager::keyboardSubmode == UiManager::SUBMODE_PROGRESSION) {
+        // Progression mode: play chord at the current progression step root
+        int progLen = UiManager::progressionLengths[UiManager::selectedProgression];
+        int step = (progLen > 0) ? (UiManager::progressionStep % progLen) : 0;
+        int stepRoot = (UiManager::progressionRoot + UiManager::progressionSteps[UiManager::selectedProgression][step]) % 12;
+        int baseNote = 60 + (UiManager::chordOctave * 12) + stepRoot;
+        int numNotes = UiManager::buildChordFromType(UiManager::selectedChordType, baseNote,
+            UiManager::selectedInversion, UiManager::selectedVoicing, chordNotes, 8);
+
+        if (code == LV_EVENT_PRESSED) {
+            for (int i = 0; i < numNotes; i++)
+                MidiManager::sendNoteOn(chordNotes[i], MidiManager::currentMidiChannel, UiManager::modWheelValue);
+            lv_obj_set_style_bg_color(target, lv_color_hex(0x184873), LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_bg_opa(target, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+            // Advance progression step
+            UiManager::progressionStep = (UiManager::progressionStep + 1) % (progLen > 0 ? progLen : 1);
+            UiManager::nextChordPad = UiManager::computeNextChordPad();
+            UiManager::updateKeyboardColors();
+        } else if (code == LV_EVENT_RELEASED) {
+            for (int i = 0; i < numNotes; i++)
+                MidiManager::sendNoteOff(chordNotes[i], MidiManager::currentMidiChannel);
             lv_obj_set_style_bg_color(target, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_bg_opa(target, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
         }
@@ -2042,9 +2407,14 @@ static void lfo3EventHandler(lv_event_t *e) {
 static void lfo4EventHandler(lv_event_t *e) { 
     if (lv_event_get_code(e) == LV_EVENT_CLICKED) { 
         if (UiManager::currentMenuState == UiManager::MENU_KEYBOARD) {
-            // Toggle Keys <-> Chord
-            UiManager::keyboardSubmode = (UiManager::keyboardSubmode == UiManager::SUBMODE_KEYS)
-                ? UiManager::SUBMODE_CHORD : UiManager::SUBMODE_KEYS;
+            // Cycle chord submodes: CHORD → CHORD_TYPE → PROGRESSION → CHORD
+            if (UiManager::keyboardSubmode == UiManager::SUBMODE_KEYS || UiManager::keyboardSubmode == UiManager::SUBMODE_PROGRESSION) {
+                UiManager::keyboardSubmode = UiManager::SUBMODE_CHORD;
+            } else if (UiManager::keyboardSubmode == UiManager::SUBMODE_CHORD) {
+                UiManager::keyboardSubmode = UiManager::SUBMODE_CHORD_TYPE;
+            } else if (UiManager::keyboardSubmode == UiManager::SUBMODE_CHORD_TYPE) {
+                UiManager::keyboardSubmode = UiManager::SUBMODE_PROGRESSION;
+            }
             UiManager::updateLFOButtonColors();
             UiManager::updateParameterLabels();
             UiManager::updateKeyboardColors();
@@ -2077,13 +2447,13 @@ static void lfoMixEventHandler(lv_event_t *e) {
     } else if (code == LV_EVENT_CLICKED) { 
         if (UiManager::isShiftActive) { UiManager::setMixerPage(0); return; }
 
-        // In keyboard mode, toggle Keys/Chord submode
+        // In keyboard mode, always return to Keys submode
         if (UiManager::currentMenuState == UiManager::MENU_KEYBOARD) {
-            UiManager::keyboardSubmode = (UiManager::keyboardSubmode == UiManager::SUBMODE_KEYS)
-                ? UiManager::SUBMODE_CHORD : UiManager::SUBMODE_KEYS;
+            UiManager::keyboardSubmode = UiManager::SUBMODE_KEYS;
             UiManager::updateLFOButtonColors();
             UiManager::updateParameterLabels();
             UiManager::updateKeyboardColors();
+            UiManager::nextChordPad = -1;
             return;
         }
 

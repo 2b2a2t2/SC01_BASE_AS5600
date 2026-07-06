@@ -266,7 +266,6 @@ void SensorManager::updateKeyboardPot(int i, float currentAngle, float angleChan
         }
     } else if (UiManager::keyboardSubmode == UiManager::SUBMODE_CHORD) {
         if (i == 16) {
-            // Octave
             static float octAccum = 0;
             octAccum += angleChange;
             if (abs(octAccum) >= 40) {
@@ -277,11 +276,9 @@ void SensorManager::updateKeyboardPot(int i, float currentAngle, float angleChan
                 UiManager::updateParameterLabels();
             }
         } else if (i == 17) {
-            // Chord Set selection (0-99)
             static float setAccum = 0;
             static unsigned long lastSetChangeTime = 0;
             static bool pendingChordSetLoad = false;
-
             setAccum += angleChange;
             if (abs(setAccum) >= 40) {
                 int delta = (setAccum > 0) ? 1 : -1;
@@ -289,22 +286,113 @@ void SensorManager::updateKeyboardPot(int i, float currentAngle, float angleChan
                 if (UiManager::selectedChordSet < 0) UiManager::selectedChordSet = UiManager::NUM_CHORD_SETS - 1;
                 if (UiManager::selectedChordSet >= UiManager::NUM_CHORD_SETS) UiManager::selectedChordSet = 0;
                 setAccum = 0;
-                // Update the labels (index + name) instantly every step
                 UiManager::updateParameterLabels();
-                // Defer the SD read + keyboard redraw until the encoder has been
-                // idle for 400 ms — prevents blocking during fast scrolling
                 lastSetChangeTime = millis();
                 pendingChordSetLoad = true;
             }
-
-            // Check if the debounce period has elapsed and a load is pending
             if (pendingChordSetLoad && (millis() - lastSetChangeTime >= 400)) {
                 UiManager::loadChordSetNotes(UiManager::selectedChordSet);
                 UiManager::updateKeyboardColors();
                 pendingChordSetLoad = false;
             }
         }
-        // i=18, i=19 unassigned
+    } else if (UiManager::keyboardSubmode == UiManager::SUBMODE_CHORD_TYPE) {
+        // Pots: 16=octave, 17=type, 18=inversion, 19=voicing
+        if (i == 16) {
+            static float octAccum = 0;
+            octAccum += angleChange;
+            if (abs(octAccum) >= 40) {
+                int delta = (octAccum > 0) ? 1 : -1;
+                UiManager::chordOctave += delta;
+                UiManager::chordOctave = constrain(UiManager::chordOctave, -2, 2);
+                octAccum = 0;
+                UiManager::updateParameterLabels();
+            }
+        } else if (i == 17) {
+            static float typeAccum = 0;
+            typeAccum += angleChange;
+            if (abs(typeAccum) >= 40) {
+                int delta = (typeAccum > 0) ? 1 : -1;
+                UiManager::selectedChordType += delta;
+                if (UiManager::selectedChordType < 0) UiManager::selectedChordType = UiManager::NUM_CHORD_TYPES - 1;
+                if (UiManager::selectedChordType >= UiManager::NUM_CHORD_TYPES) UiManager::selectedChordType = 0;
+                typeAccum = 0;
+                UiManager::updateParameterLabels();
+                UiManager::updateKeyboardColors();
+            }
+        } else if (i == 18) {
+            static float invAccum = 0;
+            invAccum += angleChange;
+            if (abs(invAccum) >= 40) {
+                int delta = (invAccum > 0) ? 1 : -1;
+                UiManager::selectedInversion += delta;
+                if (UiManager::selectedInversion < 0) UiManager::selectedInversion = UiManager::NUM_INVERSIONS - 1;
+                if (UiManager::selectedInversion >= UiManager::NUM_INVERSIONS) UiManager::selectedInversion = 0;
+                invAccum = 0;
+                UiManager::updateParameterLabels();
+            }
+        } else if (i == 19) {
+            static float voiceAccum = 0;
+            voiceAccum += angleChange;
+            if (abs(voiceAccum) >= 40) {
+                int delta = (voiceAccum > 0) ? 1 : -1;
+                UiManager::selectedVoicing += delta;
+                if (UiManager::selectedVoicing < 0) UiManager::selectedVoicing = UiManager::NUM_VOICINGS - 1;
+                if (UiManager::selectedVoicing >= UiManager::NUM_VOICINGS) UiManager::selectedVoicing = 0;
+                voiceAccum = 0;
+                UiManager::updateParameterLabels();
+            }
+        }
+    } else if (UiManager::keyboardSubmode == UiManager::SUBMODE_PROGRESSION) {
+        // Pots: 16=octave, 17=progression, 18=root key, 19=inversion
+        if (i == 16) {
+            static float octAccum = 0;
+            octAccum += angleChange;
+            if (abs(octAccum) >= 40) {
+                int delta = (octAccum > 0) ? 1 : -1;
+                UiManager::chordOctave += delta;
+                UiManager::chordOctave = constrain(UiManager::chordOctave, -2, 2);
+                octAccum = 0;
+                UiManager::updateParameterLabels();
+            }
+        } else if (i == 17) {
+            static float progAccum = 0;
+            progAccum += angleChange;
+            if (abs(progAccum) >= 40) {
+                int delta = (progAccum > 0) ? 1 : -1;
+                UiManager::selectedProgression += delta;
+                if (UiManager::selectedProgression < 0) UiManager::selectedProgression = UiManager::NUM_PROGRESSIONS - 1;
+                if (UiManager::selectedProgression >= UiManager::NUM_PROGRESSIONS) UiManager::selectedProgression = 0;
+                progAccum = 0;
+                UiManager::progressionStep = 0;
+                UiManager::updateParameterLabels();
+                UiManager::updateKeyboardColors();
+            }
+        } else if (i == 18) {
+            static float rootAccum = 0;
+            rootAccum += angleChange;
+            if (abs(rootAccum) >= 40) {
+                int delta = (rootAccum > 0) ? 1 : -1;
+                UiManager::progressionRoot += delta;
+                if (UiManager::progressionRoot < 0) UiManager::progressionRoot = 11;
+                if (UiManager::progressionRoot > 11) UiManager::progressionRoot = 0;
+                rootAccum = 0;
+                UiManager::progressionStep = 0;
+                UiManager::updateParameterLabels();
+                UiManager::updateKeyboardColors();
+            }
+        } else if (i == 19) {
+            static float invAccum = 0;
+            invAccum += angleChange;
+            if (abs(invAccum) >= 40) {
+                int delta = (invAccum > 0) ? 1 : -1;
+                UiManager::selectedInversion += delta;
+                if (UiManager::selectedInversion < 0) UiManager::selectedInversion = UiManager::NUM_INVERSIONS - 1;
+                if (UiManager::selectedInversion >= UiManager::NUM_INVERSIONS) UiManager::selectedInversion = 0;
+                invAccum = 0;
+                UiManager::updateParameterLabels();
+            }
+        }
     }
 
     currentPotentiometerValues[i] = potentiometerValues[i];

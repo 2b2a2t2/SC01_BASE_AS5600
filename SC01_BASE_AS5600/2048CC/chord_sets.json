@@ -500,5 +500,44 @@
       "name": "Modern",
       "chords": ["CM9", "Cm9", "Dm9", "Dm6/9", "CM9/E", "Dm9/F", "D9/F#", "Gsus13", "G13b9", "AbMaj13", "AbDimM7", "BbM13"]
     }
+  ],
+  "chord_types": [
+    { "id": 1,  "name": "Minor Triad",   "intervals": [0,3,7],       "vibe": "Dark, familiar" },
+    { "id": 2,  "name": "Power Chord",   "intervals": [0,7],          "vibe": "Open, ambiguous" },
+    { "id": 3,  "name": "Sus2",          "intervals": [0,2,7],        "vibe": "Floating" },
+    { "id": 4,  "name": "Sus4",          "intervals": [0,5,7],        "vibe": "Restless" },
+    { "id": 5,  "name": "Minor 7th",     "intervals": [0,3,7,10],     "vibe": "Soulful" },
+    { "id": 6,  "name": "Add9",          "intervals": [0,2,3,7],      "vibe": "Friction" },
+    { "id": 7,  "name": "Minor 9th",     "intervals": [0,3,7,10,14],  "vibe": "Cinematic" },
+    { "id": 8,  "name": "Major 7th",     "intervals": [0,4,7,11],     "vibe": "Bittersweet" },
+    { "id": 9,  "name": "Quartal",       "intervals": [0,5,10],       "vibe": "Cold, angular" },
+    { "id": 10, "name": "Cluster",       "intervals": [0,1,6],        "vibe": "Dissonant" },
+    { "id": 11, "name": "Diminished",    "intervals": [0,3,6],        "vibe": "Tension" }
+  ],
+  "progressions": [
+    { "id": 1, "name": "The Classic",   "pattern": ["i","iv"],            "vibe": "Familiar, reliable" },
+    { "id": 2, "name": "The Shadow",    "pattern": ["i","v"],             "vibe": "Dark, suspended" },
+    { "id": 3, "name": "The Modal",     "pattern": ["i","VII"],           "vibe": "Melancholic" },
+    { "id": 4, "name": "The Workhorse", "pattern": ["i","iv","i","v"],    "vibe": "Driving, cyclic" },
+    { "id": 5, "name": "The Cyclical",  "pattern": ["i","VI","III","VII"],"vibe": "Ambiguous, hopeful" },
+    { "id": 6, "name": "The Borrowed",  "pattern": ["i","bVII","IV","i"], "vibe": "Surprising, bright" }
+  ],
+  "roman_numeral_offsets": {
+    "i":0, "ii":2, "II":2, "iim":2, "IIm":2,
+    "III":3, "iii":3, "iv":5, "IV":5,
+    "v":7, "V":7, "vi":8, "VI":8,
+    "vii":10, "VII":10,
+    "bII":1, "bIII":3, "bVI":8, "bVII":10
+  },
+  "inversions": [
+    { "id": 0, "name": "Root", "rotation": 0, "description": "Root note at the bottom" },
+    { "id": 1, "name": "1st",  "rotation": 1, "description": "3rd at the bottom" },
+    { "id": 2, "name": "2nd",  "rotation": 2, "description": "5th at the bottom" }
+  ],
+  "voicings": [
+    { "id": 0, "name": "Close",        "description": "Default close position" },
+    { "id": 1, "name": "OctaveSpread", "description": "Move 3rd or 7th up an octave" },
+    { "id": 2, "name": "Rootless",     "description": "Drop the root note" },
+    { "id": 3, "name": "Cluster",      "description": "Stack tight intervals [0,1,6] and sweep a filter" }
   ]
 }

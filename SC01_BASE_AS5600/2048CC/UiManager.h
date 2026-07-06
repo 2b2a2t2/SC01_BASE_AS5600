@@ -64,7 +64,7 @@ public:
     static void setMixerPage(int page);
 
     // ---- Keyboard Submode ----
-    enum KeyboardSubmode { SUBMODE_KEYS, SUBMODE_CHORD };
+    enum KeyboardSubmode { SUBMODE_KEYS, SUBMODE_CHORD, SUBMODE_CHORD_TYPE, SUBMODE_PROGRESSION };
     static KeyboardSubmode keyboardSubmode;
 
     // Keys submode state (keyboardOctave lives in MidiManager)
@@ -75,6 +75,15 @@ public:
     // Chord submode state (J-6 style chord set player)
     static int chordOctave;            // -2 to +2 (relative to middle C)
     static int selectedChordSet;       // 0-99
+
+    // Chord Type & Progression submode state (Chapter 1-3)
+    static int selectedChordType;      // 0-10 (index into chord_types)
+    static int selectedProgression;    // 0-5 (index into progressions)
+    static int progressionStep;        // current step index in progression
+    static int progressionRoot;        // 0-11 (root key for progression)
+    static int nextChordPad;           // -1 or 0-11 (highlighted "next" pad)
+    static int selectedInversion;      // 0=Root, 1=1st, 2=2nd
+    static int selectedVoicing;        // 0=Close, 1=OctaveSpread, 2=Rootless, 3=Cluster
 
     static const int NUM_SCALES;
     static const char* scaleNames[19];
@@ -89,7 +98,30 @@ public:
     static String chordSetNotes[12]; // Only the 12 chords of the currently-selected set
     static void loadChordSets();     // Loads all 100 names (names only)
     static void loadChordSetNotes(int setIndex); // Loads chords for one set
+    static int  buildChordFromType(int chordTypeIdx, int rootNote, int inversion, int voicing, uint8_t* notes, int maxNotes);
+    static int  applyInversion(uint8_t* notes, int numNotes, int inv);
+    static int  applyVoicing(uint8_t* notes, int numNotes, int voicingId);
+    static int  computeNextChordPad();
     static const int NUM_CHORD_SETS = 100;
+
+    // Chord types & progressions (loaded from SD card /chord_sets.json)
+    static const int NUM_CHORD_TYPES = 11;
+    static const int NUM_PROGRESSIONS = 6;
+    static const int NUM_INVERSIONS = 3;
+    static const int NUM_VOICINGS = 4;
+    static String chordTypeNames[NUM_CHORD_TYPES];
+    static int chordTypeIntervals[NUM_CHORD_TYPES][8];
+    static int chordTypeNoteCounts[NUM_CHORD_TYPES];
+    static String progressionNames[NUM_PROGRESSIONS];
+    static int progressionSteps[NUM_PROGRESSIONS][8];
+    static int progressionLengths[NUM_PROGRESSIONS];
+    static String inversionNames[NUM_INVERSIONS];
+    static int inversionRotations[NUM_INVERSIONS];
+    static String voicingNames[NUM_VOICINGS];
+    static void parseChordTypes();
+    static void parseProgressions();
+    static void parseInversions();
+    static void parseVoicings();
 
     static void updateKeyboardColors();
 
