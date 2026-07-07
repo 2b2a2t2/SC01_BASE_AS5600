@@ -150,6 +150,8 @@ int UiManager::progressionRoot = 4; // default E
 int UiManager::nextChordPad = -1;
 int UiManager::selectedInversion = 0;
 int UiManager::selectedVoicing = 0;
+uint8_t UiManager::heldChordNotes[12][8];
+int UiManager::heldChordCount[12] = {0};
 String UiManager::chordTypeNames[11];
 int UiManager::chordTypeIntervals[11][8];
 int UiManager::chordTypeNoteCounts[11];
@@ -1333,40 +1335,23 @@ void UiManager::updateLFOButtonColors() {
     lv_obj_set_style_text_color(ui_LabelButtonLFOMix, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
 
     if (currentMenuState == MENU_KEYBOARD) {
-        // ButtonLFOMix always returns to Keys mode
-        if (ui_LabelButtonLFOMix) {
-            lv_label_set_text(ui_LabelButtonLFOMix, keyboardSubmode == SUBMODE_KEYS ? "Keys" : "Keys");
-        }
-        if (ui_LabelButtonSettings1) lv_label_set_text(ui_LabelButtonSettings1, "Oct -");
-        if (ui_LabelButtonSettings2) lv_label_set_text(ui_LabelButtonSettings2, "Oct +");
-        if (ui_LabelButtonSettings3) lv_label_set_text(ui_LabelButtonSettings3, "Oct Reset");
-        if (ui_LabelButtonSettings4) {
-            const char* nextLabel = "Chrd";
-            if (keyboardSubmode == SUBMODE_KEYS) nextLabel = "Chrd";
-            else if (keyboardSubmode == SUBMODE_CHORD) nextLabel = "Type>";
-            else if (keyboardSubmode == SUBMODE_CHORD_TYPE) nextLabel = "Prog>";
-            else if (keyboardSubmode == SUBMODE_PROGRESSION) nextLabel = "Chrd";
-            lv_label_set_text(ui_LabelButtonSettings4, nextLabel);
-        }
-        
-        // Highlight the active submode: LFOMix for Keys, Settings4 for chord submodes
-        bool isKeyMode = (keyboardSubmode == SUBMODE_KEYS);
-        lv_color_t keyColor = lv_color_hex(0x00AA55);
-        lv_color_t chordColor = lv_color_hex(0xAA5500);
-        lv_obj_set_style_bg_color(ui_ButtonLFOMix, isKeyMode ? keyColor : lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_bg_opa(ui_ButtonLFOMix, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_bg_color(ui_ButtonSettings4, isKeyMode ? lv_color_hex(0x000000) : chordColor, LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_bg_opa(ui_ButtonSettings4, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_text_color(ui_LabelButtonLFOMix, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_text_color(ui_LabelButtonSettings4, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+        if (ui_LabelButtonSettings1) lv_label_set_text(ui_LabelButtonSettings1, "Keys");
+        if (ui_LabelButtonSettings2) lv_label_set_text(ui_LabelButtonSettings2, "Chrd");
+        if (ui_LabelButtonSettings3) lv_label_set_text(ui_LabelButtonSettings3, "Type");
+        if (ui_LabelButtonSettings4) lv_label_set_text(ui_LabelButtonSettings4, "Prog");
+        if (ui_LabelButtonLFOMix) lv_label_set_text(ui_LabelButtonLFOMix, "← Keys");
 
-        // Indicate current octave (highlight if not zero)
-        bool isChordSubmode = (keyboardSubmode == SUBMODE_CHORD || keyboardSubmode == SUBMODE_CHORD_TYPE || keyboardSubmode == SUBMODE_PROGRESSION);
-        int oct = isChordSubmode ? chordOctave : MidiManager::keyboardOctave;
-        if (oct != 0) {
-            lv_obj_set_style_bg_color(ui_ButtonSettings3, lv_color_hex(0x184873), LV_PART_MAIN | LV_STATE_DEFAULT);
-            lv_obj_set_style_bg_opa(ui_ButtonSettings3, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-        }
+        lv_color_t activeColor = lv_color_hex(0x00AA55);
+        lv_obj_set_style_bg_color(ui_ButtonSettings1, keyboardSubmode == SUBMODE_KEYS ? activeColor : lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_opa(ui_ButtonSettings1, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_color(ui_ButtonSettings2, keyboardSubmode == SUBMODE_CHORD ? activeColor : lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_opa(ui_ButtonSettings2, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_color(ui_ButtonSettings3, keyboardSubmode == SUBMODE_CHORD_TYPE ? activeColor : lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_opa(ui_ButtonSettings3, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_color(ui_ButtonSettings4, keyboardSubmode == SUBMODE_PROGRESSION ? activeColor : lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_opa(ui_ButtonSettings4, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_color(ui_ButtonLFOMix, keyboardSubmode == SUBMODE_KEYS ? lv_color_hex(0x000000) : lv_color_hex(0x184873), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_opa(ui_ButtonLFOMix, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
         return;
     }
 
@@ -2030,7 +2015,6 @@ void UiManager::setMenuState(MenuState state) {
             updateTrackButtonLabels();
             break;
         case MENU_KEYBOARD:
-            keyboardSubmode = SUBMODE_KEYS;
             lv_obj_clear_flag(ui_ContainerKeyboard, LV_OBJ_FLAG_HIDDEN);
             updateKeyboardColors();
             updateParameterLabels();
@@ -2176,6 +2160,38 @@ static int snapToScale(int keyIndex, int scaleIdx, int dir) {
     return keyIndex;
 }
 
+void UiManager::clearAllHeldNotes() {
+    for (int p = 0; p < 12; p++) {
+        int n = heldChordCount[p];
+        for (int i = 0; i < n; i++)
+            MidiManager::sendNoteOff(heldChordNotes[p][i], MidiManager::currentMidiChannel);
+        heldChordCount[p] = 0;
+    }
+}
+
+static void highlightChordNotes(const uint8_t* notes, int numNotes) {
+    lv_obj_t* kbButtons[] = { ui_ButtonKeyboard1, ui_ButtonKeyboard2, ui_ButtonKeyboard3, ui_ButtonKeyboard4,
+                               ui_ButtonKeyboard5, ui_ButtonKeyboard6, ui_ButtonKeyboard7, ui_ButtonKeyboard8,
+                               ui_ButtonKeyboard9, ui_ButtonKeyboard10, ui_ButtonKeyboard11, ui_ButtonKeyboard12 };
+    uint8_t rootPc = numNotes > 0 ? (notes[0] % 12) : 255;
+    for (int i = 0; i < 12; i++) {
+        bool match = false;
+        for (int j = 0; j < numNotes; j++) {
+            if (i == (notes[j] % 12)) { match = true; break; }
+        }
+        if (match) {
+            lv_color_t col = (i == rootPc) ? lv_color_hex(0x00AAAA) : lv_color_hex(0x00FF00);
+            lv_obj_set_style_border_color(kbButtons[i], col, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_border_width(kbButtons[i], 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_border_opa(kbButtons[i], LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+        }
+    }
+}
+
+static void clearChordHighlight() {
+    UiManager::updateKeyboardColors();
+}
+
 static void ui_event_KeyboardGeneric(lv_event_t *e) {
     lv_event_code_t code = lv_event_get_code(e);
     lv_obj_t* target = lv_event_get_target(e);
@@ -2185,68 +2201,79 @@ static void ui_event_KeyboardGeneric(lv_event_t *e) {
     if (UiManager::keyboardSubmode == UiManager::SUBMODE_CHORD) {
         const char* chordName = UiManager::chordSetNotes[keyIndex].c_str();
         int baseNote = 60 + (UiManager::chordOctave * 12);
-        int numNotes = chordNameToNotes(chordName, baseNote, chordNotes, 8);
 
         if (code == LV_EVENT_PRESSED) {
+            int numNotes = chordNameToNotes(chordName, baseNote, UiManager::heldChordNotes[keyIndex], 8);
+            UiManager::heldChordCount[keyIndex] = numNotes;
             for (int i = 0; i < numNotes; i++)
-                MidiManager::sendNoteOn(chordNotes[i], MidiManager::currentMidiChannel, UiManager::modWheelValue);
+                MidiManager::sendNoteOn(UiManager::heldChordNotes[keyIndex][i], MidiManager::currentMidiChannel, UiManager::modWheelValue);
             lv_obj_set_style_bg_color(target, lv_color_hex(0x184873), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_bg_opa(target, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+            highlightChordNotes(UiManager::heldChordNotes[keyIndex], numNotes);
         } else if (code == LV_EVENT_RELEASED) {
-            for (int i = 0; i < numNotes; i++)
-                MidiManager::sendNoteOff(chordNotes[i], MidiManager::currentMidiChannel);
+            int n = UiManager::heldChordCount[keyIndex];
+            for (int i = 0; i < n; i++)
+                MidiManager::sendNoteOff(UiManager::heldChordNotes[keyIndex][i], MidiManager::currentMidiChannel);
+            UiManager::heldChordCount[keyIndex] = 0;
             lv_obj_set_style_bg_color(target, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_bg_opa(target, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+            clearChordHighlight();
         }
         return;
     }
 
     if (UiManager::keyboardSubmode == UiManager::SUBMODE_CHORD_TYPE) {
-        // Chord Type mode: play selected chord type at pressed root
         int baseNote = 60 + (UiManager::chordOctave * 12) + keyIndex;
-        int numNotes = UiManager::buildChordFromType(UiManager::selectedChordType, baseNote,
-            UiManager::selectedInversion, UiManager::selectedVoicing, chordNotes, 8);
 
         if (code == LV_EVENT_PRESSED) {
+            int numNotes = UiManager::buildChordFromType(UiManager::selectedChordType, baseNote,
+                UiManager::selectedInversion, UiManager::selectedVoicing, UiManager::heldChordNotes[keyIndex], 8);
+            UiManager::heldChordCount[keyIndex] = numNotes;
             for (int i = 0; i < numNotes; i++)
-                MidiManager::sendNoteOn(chordNotes[i], MidiManager::currentMidiChannel, UiManager::modWheelValue);
+                MidiManager::sendNoteOn(UiManager::heldChordNotes[keyIndex][i], MidiManager::currentMidiChannel, UiManager::modWheelValue);
             lv_obj_set_style_bg_color(target, lv_color_hex(0x184873), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_bg_opa(target, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-            // Advance next chord suggestion
             UiManager::nextChordPad = (keyIndex + 7) % 12;
             UiManager::updateKeyboardColors();
+            highlightChordNotes(UiManager::heldChordNotes[keyIndex], numNotes);
         } else if (code == LV_EVENT_RELEASED) {
-            for (int i = 0; i < numNotes; i++)
-                MidiManager::sendNoteOff(chordNotes[i], MidiManager::currentMidiChannel);
+            int n = UiManager::heldChordCount[keyIndex];
+            for (int i = 0; i < n; i++)
+                MidiManager::sendNoteOff(UiManager::heldChordNotes[keyIndex][i], MidiManager::currentMidiChannel);
+            UiManager::heldChordCount[keyIndex] = 0;
             lv_obj_set_style_bg_color(target, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_bg_opa(target, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+            clearChordHighlight();
         }
         return;
     }
 
     if (UiManager::keyboardSubmode == UiManager::SUBMODE_PROGRESSION) {
-        // Progression mode: play chord at the current progression step root
         int progLen = UiManager::progressionLengths[UiManager::selectedProgression];
         int step = (progLen > 0) ? (UiManager::progressionStep % progLen) : 0;
         int stepRoot = (UiManager::progressionRoot + UiManager::progressionSteps[UiManager::selectedProgression][step]) % 12;
         int baseNote = 60 + (UiManager::chordOctave * 12) + stepRoot;
-        int numNotes = UiManager::buildChordFromType(UiManager::selectedChordType, baseNote,
-            UiManager::selectedInversion, UiManager::selectedVoicing, chordNotes, 8);
 
         if (code == LV_EVENT_PRESSED) {
+            int numNotes = UiManager::buildChordFromType(UiManager::selectedChordType, baseNote,
+                UiManager::selectedInversion, UiManager::selectedVoicing, UiManager::heldChordNotes[keyIndex], 8);
+            UiManager::heldChordCount[keyIndex] = numNotes;
             for (int i = 0; i < numNotes; i++)
-                MidiManager::sendNoteOn(chordNotes[i], MidiManager::currentMidiChannel, UiManager::modWheelValue);
+                MidiManager::sendNoteOn(UiManager::heldChordNotes[keyIndex][i], MidiManager::currentMidiChannel, UiManager::modWheelValue);
             lv_obj_set_style_bg_color(target, lv_color_hex(0x184873), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_bg_opa(target, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-            // Advance progression step
             UiManager::progressionStep = (UiManager::progressionStep + 1) % (progLen > 0 ? progLen : 1);
             UiManager::nextChordPad = UiManager::computeNextChordPad();
             UiManager::updateKeyboardColors();
+            highlightChordNotes(UiManager::heldChordNotes[keyIndex], numNotes);
         } else if (code == LV_EVENT_RELEASED) {
-            for (int i = 0; i < numNotes; i++)
-                MidiManager::sendNoteOff(chordNotes[i], MidiManager::currentMidiChannel);
+            int n = UiManager::heldChordCount[keyIndex];
+            for (int i = 0; i < n; i++)
+                MidiManager::sendNoteOff(UiManager::heldChordNotes[keyIndex][i], MidiManager::currentMidiChannel);
+            UiManager::heldChordCount[keyIndex] = 0;
             lv_obj_set_style_bg_color(target, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_bg_opa(target, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+            clearChordHighlight();
         }
         return;
     }
@@ -2335,15 +2362,11 @@ static void ui_event_ArcGeneric(lv_event_t *e) {}
 static void lfo1EventHandler(lv_event_t *e) { 
     if (lv_event_get_code(e) == LV_EVENT_CLICKED) { 
         if (UiManager::currentMenuState == UiManager::MENU_KEYBOARD) {
-            if (UiManager::keyboardSubmode == UiManager::SUBMODE_CHORD) {
-                UiManager::chordOctave--;
-                if (UiManager::chordOctave < -2) UiManager::chordOctave = -2;
-            } else {
-                MidiManager::keyboardOctave--;
-                if (MidiManager::keyboardOctave < -4) MidiManager::keyboardOctave = -4;
-            }
+            UiManager::clearAllHeldNotes();
+            UiManager::keyboardSubmode = UiManager::SUBMODE_KEYS;
             UiManager::updateLFOButtonColors();
             UiManager::updateParameterLabels();
+            UiManager::updateKeyboardColors();
             return;
         }
         if (UiManager::isShiftActive) { UiManager::setMixerPage(1); return; }
@@ -2360,15 +2383,11 @@ static void lfo1EventHandler(lv_event_t *e) {
 static void lfo2EventHandler(lv_event_t *e) { 
     if (lv_event_get_code(e) == LV_EVENT_CLICKED) { 
         if (UiManager::currentMenuState == UiManager::MENU_KEYBOARD) {
-            if (UiManager::keyboardSubmode == UiManager::SUBMODE_CHORD) {
-                UiManager::chordOctave++;
-                if (UiManager::chordOctave > 2) UiManager::chordOctave = 2;
-            } else {
-                MidiManager::keyboardOctave++;
-                if (MidiManager::keyboardOctave > 4) MidiManager::keyboardOctave = 4;
-            }
+            UiManager::clearAllHeldNotes();
+            UiManager::keyboardSubmode = UiManager::SUBMODE_CHORD;
             UiManager::updateLFOButtonColors();
             UiManager::updateParameterLabels();
+            UiManager::updateKeyboardColors();
             return;
         }
         if (UiManager::isShiftActive) { UiManager::setMixerPage(2); return; }
@@ -2385,12 +2404,11 @@ static void lfo2EventHandler(lv_event_t *e) {
 static void lfo3EventHandler(lv_event_t *e) { 
     if (lv_event_get_code(e) == LV_EVENT_CLICKED) { 
         if (UiManager::currentMenuState == UiManager::MENU_KEYBOARD) {
-            if (UiManager::keyboardSubmode == UiManager::SUBMODE_CHORD) {
-                UiManager::chordOctave = 0;
-            } else {
-                MidiManager::keyboardOctave = 0;
-            }
+            UiManager::clearAllHeldNotes();
+            UiManager::keyboardSubmode = UiManager::SUBMODE_CHORD_TYPE;
             UiManager::updateLFOButtonColors();
+            UiManager::updateParameterLabels();
+            UiManager::updateKeyboardColors();
             return;
         }
         if (UiManager::isShiftActive) { UiManager::setMixerPage(3); return; }
@@ -2407,14 +2425,8 @@ static void lfo3EventHandler(lv_event_t *e) {
 static void lfo4EventHandler(lv_event_t *e) { 
     if (lv_event_get_code(e) == LV_EVENT_CLICKED) { 
         if (UiManager::currentMenuState == UiManager::MENU_KEYBOARD) {
-            // Cycle chord submodes: CHORD → CHORD_TYPE → PROGRESSION → CHORD
-            if (UiManager::keyboardSubmode == UiManager::SUBMODE_KEYS || UiManager::keyboardSubmode == UiManager::SUBMODE_PROGRESSION) {
-                UiManager::keyboardSubmode = UiManager::SUBMODE_CHORD;
-            } else if (UiManager::keyboardSubmode == UiManager::SUBMODE_CHORD) {
-                UiManager::keyboardSubmode = UiManager::SUBMODE_CHORD_TYPE;
-            } else if (UiManager::keyboardSubmode == UiManager::SUBMODE_CHORD_TYPE) {
-                UiManager::keyboardSubmode = UiManager::SUBMODE_PROGRESSION;
-            }
+            UiManager::clearAllHeldNotes();
+            UiManager::keyboardSubmode = UiManager::SUBMODE_PROGRESSION;
             UiManager::updateLFOButtonColors();
             UiManager::updateParameterLabels();
             UiManager::updateKeyboardColors();
@@ -2449,6 +2461,7 @@ static void lfoMixEventHandler(lv_event_t *e) {
 
         // In keyboard mode, always return to Keys submode
         if (UiManager::currentMenuState == UiManager::MENU_KEYBOARD) {
+            UiManager::clearAllHeldNotes();
             UiManager::keyboardSubmode = UiManager::SUBMODE_KEYS;
             UiManager::updateLFOButtonColors();
             UiManager::updateParameterLabels();

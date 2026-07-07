@@ -85,6 +85,10 @@ public:
     static int selectedInversion;      // 0=Root, 1=1st, 2=2nd
     static int selectedVoicing;        // 0=Close, 1=OctaveSpread, 2=Rootless, 3=Cluster
 
+    // Per-pad held-note storage for safe note-off on release (survives octave changes)
+    static uint8_t heldChordNotes[12][8];
+    static int heldChordCount[12];
+
     static const int NUM_SCALES;
     static const char* scaleNames[19];
     static const int scalePatterns[19][12];
@@ -124,6 +128,7 @@ public:
     static void parseVoicings();
 
     static void updateKeyboardColors();
+    static void clearAllHeldNotes();
 
     // Global UI Object Arrays (made public for direct access by event handlers in .ino for now)
     static lv_obj_t *ui_ButtonChannel[16];
