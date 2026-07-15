@@ -32,7 +32,7 @@ Powered by 20× AS5600 magnetic encoders, LVGL touchscreen UI, BLE MIDI, Web Con
 
 # 🎛 MIDI Engine
 
-- 8 Pages × 16 MIDI Channels × 20 Encoders = **2560 mappable controls**
+- 8 Pages × 16 MIDI Channels × 16 Encoders = **2048 mappable controls**
 - MIDI CC + MIDI Note support
 - BLE MIDI + optional USB MIDI
 - Per-channel page, row, label, CC# memory
