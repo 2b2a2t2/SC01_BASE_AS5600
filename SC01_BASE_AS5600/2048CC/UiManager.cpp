@@ -1048,10 +1048,12 @@ bool UiManager::getPotDetent(int potIndex) {
         if (isMixerMode) {
             int cc = MidiManager::mixerPageCCs[currentMixerPage][potIndex];
             int ch = MidiManager::mixerPageChannels[currentMixerPage][potIndex];
-            int p = (cc - 1) / 16;
-            int pot = (cc - 1) % 16;
-            if (p >= 0 && p < NUM_PAGES && ch >= 0 && ch < NUM_CHANNELS) {
-                return MidiManager::storedPotentiometerDetents[p][ch][pot];
+            if (cc >= 1 && cc <= 128) {
+                int p = (cc - 1) / 16;
+                int pot = (cc - 1) % 16;
+                if (p >= 0 && p < NUM_PAGES && pot >= 0 && pot < NUM_POTS && ch >= 0 && ch < NUM_CHANNELS) {
+                    return MidiManager::storedPotentiometerDetents[p][ch][pot];
+                }
             }
             return false;
         }

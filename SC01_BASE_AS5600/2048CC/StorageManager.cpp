@@ -638,11 +638,29 @@ void StorageManager::saveLabel(int page, int channel, int pot, String label) {
         MidiManager::currentArcLabels[pot] = label;
     }
 
+    // Also update mixer display cache when editing from mixer mode
+    if (UiManager::isMixerMode) {
+        for (int i = 0; i < 16; i++) {
+            uint8_t cc = MidiManager::mixerPageCCs[UiManager::currentMixerPage][i];
+            uint8_t ch = MidiManager::mixerPageChannels[UiManager::currentMixerPage][i];
+            if (cc >= 1 && cc <= 128) {
+                int targetPage = (cc - 1) / 16;
+                int targetPot = (cc - 1) % 16;
+                if (targetPage == page && targetPot == pot && ch == channel) {
+                    MidiManager::currentMixerArcLabels[i] = label;
+                    break;
+                }
+            }
+        }
+    }
+
     File file = SD.open("/arc_labels.json", FILE_WRITE);
     if (file) {
         serializeJson(*cache, file);
         file.close();
     }
+
+    lastSaveTime = millis();
 }
 
 String StorageManager::getLabel(int page, int channel, int pot) {
