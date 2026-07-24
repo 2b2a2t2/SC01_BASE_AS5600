@@ -377,7 +377,9 @@ void MidiManager::updateGlobalValueSync(uint8_t cc, uint8_t channel, int value, 
 
 void MidiManager::loadValuesForCurrentState() {
     StorageManager::loadLabelsForCurrentState();
-    // Arcs 1-16: Prioritize Mixer values if active
+
+    needsResync = true;
+
     if (UiManager::isMixerMode) {
         StorageManager::loadMixerLabelsForCurrentState();
         for (int i = 0; i < 16; i++) {
