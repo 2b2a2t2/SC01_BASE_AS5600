@@ -22,7 +22,7 @@ Powered by 20× AS5600 magnetic encoders, LVGL touchscreen UI, BLE MIDI, Web Con
 | BLE MIDI | Enabled by default |
 | WiFi Web Server | Browser-based live configuration + file manager |
 | Vibration Motor | Configurable haptic feedback |
-| 8 Pages × 16 Channels × 20 Encoders | 2560 mappable MIDI CC/Note controls |
+| 8 Pages × 16 Channels × 16 Encoders (+ 4 mirrored or dedicated) | 2048 mappable MIDI CC/Note controls |
 | 4 Independent LFOs | 6 waveforms + mix mode + modulation routing |
 | Chord Engine | 100 chord sets, 11 chord types, progressions, inversions, voicings |
 | Keyboard Mode | 19 scales, velocity curves, scale snap |
