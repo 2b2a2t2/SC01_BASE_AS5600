@@ -28,6 +28,7 @@ Powered by 20× AS5600 magnetic encoders, LVGL touchscreen UI, BLE MIDI, Web Con
 | Keyboard Mode | 19 scales, velocity curves, scale snap |
 | Track & Template System | 4 layers × 4 action buttons + 8 template arcs |
 
+A rough jam using the device : https://youtu.be/ABDufwbSLyU
 ---
 
 # 🎛 MIDI Engine
@@ -355,6 +356,7 @@ Pull requests are welcome. I'm not a coder IRL — everything in this repo is ma
 What do you use, what do you need, and what do you want? Ideas, improvements, and feature requests are encouraged.
 
 monsieurgrosconnard(at)gmail.com
+
 
 ---
 
